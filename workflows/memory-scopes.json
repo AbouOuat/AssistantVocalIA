@@ -1,0 +1,108 @@
+﻿{
+  "name": "[DEV] Memory Scopes — Persist Context",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "memory",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "memory-scopes"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.body.operation }}", "rightValue": "set", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "route-operation",
+      "name": "SET ou GET ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'jarvis:memory:' + $('Webhook').first().json.body.user_id + ':' + $('Webhook').first().json.body.scope + ':' + $('Webhook').first().json.body.key }}",
+        "value": "={{ JSON.stringify($('Webhook').first().json.body.value) }}",
+        "expire": true,
+        "ttl": 2592000
+      },
+      "id": "redis-set",
+      "name": "Redis SET",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [700, 180],
+      "credentials": {
+        "redis": {
+          "id": "redis-creds",
+          "name": "Redis Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ 'jarvis:memory:' + $('Webhook').first().json.body.user_id + ':' + $('Webhook').first().json.body.scope + ':' + $('Webhook').first().json.body.key }}"
+      },
+      "id": "redis-get",
+      "name": "Redis GET",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [700, 420],
+      "credentials": {
+        "redis": {
+          "id": "redis-creds",
+          "name": "Redis Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, operation: 'set', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key }) }}"
+      },
+      "id": "respond-set",
+      "name": "Répondre SET",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [940, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, operation: 'get', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key, value: $json.value ? JSON.parse($json.value) : null }) }}"
+      },
+      "id": "respond-get",
+      "name": "Répondre GET",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [940, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "SET ou GET ?", "type": "main", "index": 0 }]] },
+    "SET ou GET ?": {
+      "main": [
+        [{ "node": "Redis SET", "type": "main", "index": 0 }],
+        [{ "node": "Redis GET", "type": "main", "index": 0 }]
+      ]
+    },
+    "Redis SET": { "main": [[{ "node": "Répondre SET", "type": "main", "index": 0 }]] },
+    "Redis GET": { "main": [[{ "node": "Répondre GET", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "hackathon", "demo"]
+}

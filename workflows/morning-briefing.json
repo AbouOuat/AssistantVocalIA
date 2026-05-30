@@ -1,0 +1,92 @@
+﻿{
+  "name": "[DEV] Morning Briefing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "morning-briefing",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "morning-briefing"
+    },
+    {
+      "parameters": {
+        "url": "https://api.openweathermap.org/data/2.5/weather",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "q", "value": "Paris,FR" },
+            { "name": "appid", "value": "={{ $env.OPENWEATHER_API_KEY }}" },
+            { "name": "units", "value": "metric" },
+            { "name": "lang", "value": "fr" }
+          ]
+        }
+      },
+      "id": "weather-node",
+      "name": "Météo du jour",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 5,
+        "filters": {
+          "q": "is:unread newer_than:1d"
+        }
+      },
+      "id": "gmail-node",
+      "name": "Emails non lus",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const weather = $('Météo du jour').first().json;\nconst emails = $('Emails non lus').all();\n\nconst weatherSummary = `${weather.weather[0].description}, ${Math.round(weather.main.temp)}°C (ressenti ${Math.round(weather.main.feels_like)}°C)`;\n\nconst emailSummary = emails.length === 0\n  ? 'Aucun email non lu.'\n  : emails.map(e => `• ${e.json.payload?.headers?.find(h => h.name === 'From')?.value?.split('<')[0]?.trim() || 'Inconnu'}: ${e.json.snippet?.substring(0, 80)}...`).join('\\n');\n\nconst now = new Date();\nconst greeting = now.getHours() < 12 ? 'Bonjour' : 'Bonsoir';\nconst dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });\n\nreturn [{\n  json: {\n    briefing: `${greeting} ! Nous sommes le ${dateStr}.\\n\\nMétéo : ${weatherSummary}.\\n\\nEmails importants :\\n${emailSummary}`,\n    weather: weatherSummary,\n    email_count: emails.length\n  }\n}];"
+      },
+      "id": "format-node",
+      "name": "Formater le briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ briefing: $json.briefing, weather: $json.weather, email_count: $json.email_count }) }}"
+      },
+      "id": "respond-node",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [940, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Météo du jour", "type": "main", "index": 0 }, { "node": "Emails non lus", "type": "main", "index": 0 }]]
+    },
+    "Météo du jour": { "main": [[{ "node": "Formater le briefing", "type": "main", "index": 0 }]] },
+    "Emails non lus": { "main": [[{ "node": "Formater le briefing", "type": "main", "index": 0 }]] },
+    "Formater le briefing": { "main": [[{ "node": "Répondre", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "hackathon", "demo"]
+}

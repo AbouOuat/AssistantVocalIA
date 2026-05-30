@@ -1,0 +1,125 @@
+﻿{
+  "name": "[DEV] Smart Agent — Analyze Notes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smart-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "smart-agent"
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "complete",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Tu es Jarvis, un assistant IA expert en productivité. Analyse les notes de l'utilisateur et génère : 1) Un plan d'action structuré avec 3-5 étapes concrètes et prioritisées, 2) Un brouillon d'email professionnel si une action nécessite une communication. Réponds en JSON avec les clés : action_plan (array de strings), email_draft (objet avec subject et body si pertinent, sinon null), summary (string résumant en 1 phrase)."
+            },
+            {
+              "role": "user",
+              "content": "=Analyse ces notes et génère un plan d'action :\n\n{{ $json.body.notes }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "openai-analyze",
+      "name": "Analyser avec GPT-4o",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json.message.content;\nlet parsed;\ntry {\n  parsed = JSON.parse(response);\n} catch (e) {\n  parsed = { action_plan: [response], email_draft: null, summary: 'Analyse complète.' };\n}\n\nreturn [{ json: parsed }];"
+      },
+      "id": "parse-node",
+      "name": "Parser la réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.email_draft }}", "rightValue": "", "operator": { "type": "object", "operation": "notEmpty" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-email",
+      "name": "Email à envoyer ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').first().json.body.recipient_email || 'ouat.abou34@gmail.com' }}",
+        "subject": "={{ $json.email_draft.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.email_draft.body }}",
+        "options": {}
+      },
+      "id": "gmail-send",
+      "name": "Envoyer email draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ action_plan: $('Parser la réponse').first().json.action_plan, summary: $('Parser la réponse').first().json.summary, email_sent: $('Email à envoyer ?').first().json.email_draft !== null }) }}"
+      },
+      "id": "respond-node",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1440, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Analyser avec GPT-4o", "type": "main", "index": 0 }]] },
+    "Analyser avec GPT-4o": { "main": [[{ "node": "Parser la réponse", "type": "main", "index": 0 }]] },
+    "Parser la réponse": { "main": [[{ "node": "Email à envoyer ?", "type": "main", "index": 0 }]] },
+    "Email à envoyer ?": {
+      "main": [
+        [{ "node": "Envoyer email draft", "type": "main", "index": 0 }],
+        [{ "node": "Répondre", "type": "main", "index": 0 }]
+      ]
+    },
+    "Envoyer email draft": { "main": [[{ "node": "Répondre", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "hackathon", "demo"]
+}

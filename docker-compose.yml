@@ -34,7 +34,7 @@ services:
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       SECRET_KEY: ${SECRET_KEY}
-      N8N_API_URL: ${N8N_API_URL:-}
+      N8N_API_URL: ${N8N_API_URL:-http://n8n:5678/api/v1}
       N8N_API_KEY: ${N8N_API_KEY:-}
       GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL:-}
     ports:
@@ -56,6 +56,20 @@ services:
     depends_on:
       - backend
 
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      N8N_HOST: n8n.obyz.biz
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.obyz.biz
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-jarvis-n8n-2026-secret}
+      GENERIC_TIMEZONE: Europe/Paris
+      N8N_USER_MANAGEMENT_JWT_SECRET: ${SECRET_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+
 volumes:
   postgres_data:
   redis_data:
+  n8n_data:

@@ -7,7 +7,7 @@ import { Waveform } from "@/components/Waveform";
 import { LiveTranscript } from "@/components/LiveTranscript";
 import { Chat } from "@/components/Chat";
 import { QuickActions } from "@/components/QuickActions";
-import { jarvisWS } from "@/lib/websocket";
+import { jarvisWS, BACKEND_HTTP_URL } from "@/lib/websocket";
 import { jarvisRT } from "@/lib/realtime";
 import type { RTEvent } from "@/lib/realtime";
 import type { Message, OrbState } from "@/types";
@@ -101,7 +101,7 @@ export default function Home() {
 
   // Realtime API — activé si le backend confirme l'accès
   useEffect(() => {
-    fetch("/api/config")
+    fetch(`${BACKEND_HTTP_URL}/api/config`)
       .then((r) => r.json())
       .then((data) => {
         if (!data.realtime_mode) return;

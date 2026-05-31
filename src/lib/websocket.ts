@@ -38,7 +38,12 @@ export interface WsResponse {
 type MessageHandler = (msg: WsResponse) => void;
 
 const WS_URL_BASE =
-  process.env.NEXT_PUBLIC_BACKEND_WS_URL ?? "ws://localhost:8000/ws";
+  process.env.NEXT_PUBLIC_BACKEND_WS_URL ?? "ws://localhost:8090/ws";
+
+const BACKEND_HTTP_URL = WS_URL_BASE
+  .replace(/^wss:\/\//, "https://")
+  .replace(/^ws:\/\//, "http://")
+  .replace(/\/ws$/, "");
 
 class JarvisWebSocket {
   private ws: WebSocket | null = null;
@@ -50,7 +55,7 @@ class JarvisWebSocket {
 
   async fetchToken() {
     try {
-      const response = await fetch("/api/config");
+      const response = await fetch(`${BACKEND_HTTP_URL}/api/config`);
       const data = await response.json();
       this.token = data.token;
       return this.token;

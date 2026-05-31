@@ -125,6 +125,9 @@ class JarvisWebSocket {
 
   on(handler: MessageHandler) {
     this.handlers.add(handler);
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      handler({ type: "response", content: "__connected__" } as WsResponse);
+    }
     return () => this.handlers.delete(handler);
   }
 

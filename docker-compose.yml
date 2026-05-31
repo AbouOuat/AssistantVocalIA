@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: jarvis
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +17,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -42,7 +38,7 @@ services:
       N8N_API_KEY: ${N8N_API_KEY:-}
       GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL:-}
     ports:
-      - "8080:8000"
+      - "8090:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +52,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_BACKEND_WS_URL: ws://145.223.34.178:8080/ws
+      NEXT_PUBLIC_BACKEND_WS_URL: ws://145.223.34.178:8090/ws
     depends_on:
       - backend
 

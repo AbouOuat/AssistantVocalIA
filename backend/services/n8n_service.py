@@ -56,3 +56,20 @@ async def trigger_automation(workflow_name: str, params: dict) -> str:
     if result:
         return f"Automation '{workflow_name}' déclenchée ✓"
     return f"Échec déclenchement automation '{workflow_name}'"
+
+
+async def call_webhook(webhook_path: str, payload: dict) -> Optional[dict]:
+    """Appelle un webhook n8n et retourne la réponse JSON."""
+    if not settings.N8N_API_URL:
+        return None
+    base = settings.N8N_API_URL.replace("/api/v1", "").rstrip("/")
+    url = f"{base}/webhook/{webhook_path}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(f"[n8n] webhook {webhook_path} → HTTP {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"[n8n] webhook {webhook_path} indisponible: {e}")
+    return None

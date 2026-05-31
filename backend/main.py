@@ -18,7 +18,7 @@ from backend.services.voice_service import (
     process_voice_message,
 )
 from backend.services.realtime_service import realtime_session
-from backend.services.n8n_service import init_n8n
+from backend.services.n8n_service import init_n8n, call_webhook
 from backend.services.domotics_service import init_domotics
 from backend.services.auth_service import ensure_demo_user_exists, verify_jwt_token
 from backend.models import init_db
@@ -82,6 +82,38 @@ app.add_middleware(
 )
 
 
+async def _handle_n8n_command(text: str, user_id: int) -> str | None:
+    """Détecte les commandes quick actions et appelle le webhook n8n correspondant."""
+    t = text.lower().strip()
+
+    # Morning Briefing
+    if any(k in t for k in ["start my day", "morning briefing", "commence ma journée", "bonjour jarvis"]):
+        result = await call_webhook("morning-briefing", {"user_id": user_id})
+        if result and result.get("briefing"):
+            return result["briefing"]
+        return "Le Morning Briefing n8n n'est pas encore actif. Active le workflow dans n8n.obyz.biz et configure les credentials Gmail + OpenWeather."
+
+    # Emails prioritaires
+    if "check" in t and "email" in t or ("emails" in t and "priorit" in t):
+        result = await call_webhook("morning-briefing", {"user_id": user_id})
+        if result and result.get("briefing"):
+            return f"📧 Tes emails prioritaires :\n\n{result['briefing']}"
+        return "Je ne peux pas accéder à Gmail pour l'instant — active le workflow n8n Morning Briefing avec ton credential Gmail."
+
+    # Smart Agent — analyse de notes
+    if any(k in t for k in ["analyze my notes", "analyse mes notes", "my notes"]):
+        notes = text.split(":", 1)[-1].strip() if ":" in text else ""
+        if not notes:
+            return "Envoie-moi tes notes à analyser. Exemple : \"Analyze my notes: réunion lundi, budget Q3, relancer client X\""
+        result = await call_webhook("smart-agent", {"user_id": user_id, "notes": notes})
+        if result and result.get("action_plan"):
+            plan = "\n".join(f"• {step}" for step in result["action_plan"])
+            return f"📋 Plan d'action :\n\n{plan}\n\n{'📩 Email draft créé et envoyé.' if result.get('email_sent') else ''}"
+        return "Le workflow Smart Agent n8n n'est pas encore actif."
+
+    return None
+
+
 @app.get("/")
 async def root():
     return {"status": "ok", "message": "Jarvis V2 is running 🤖", "version": "2.0.0"}
@@ -132,7 +164,18 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 ctx = _contexts[user_id]
                 full_response = ""
 
-                # Stream token par token vers le frontend
+                # Détection des commandes quick actions → n8n
+                n8n_response = await _handle_n8n_command(content, user_id)
+                if n8n_response:
+                    ctx.add_message("user", content)
+                    ctx.add_message("assistant", n8n_response)
+                    await websocket.send_text(json.dumps({
+                        "type": "response",
+                        "content": n8n_response,
+                    }))
+                    continue
+
+                # Streaming GPT-4o standard
                 async for chunk in chat_completion_stream(content, ctx):
                     full_response += chunk
                     await websocket.send_text(json.dumps({

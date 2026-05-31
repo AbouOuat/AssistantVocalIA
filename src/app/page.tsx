@@ -262,7 +262,7 @@ export default function Home() {
   }, [orbState, realtimeMode]);
 
   return (
-    <main className="flex flex-col items-center min-h-screen bg-canvas">
+    <main className="flex flex-col items-center h-screen overflow-hidden bg-canvas">
       {/* Header */}
       <header className="w-full max-w-2xl flex items-center justify-between px-4 py-4">
         <h1 className="text-ink font-semibold text-[18px]">Jarvis</h1>

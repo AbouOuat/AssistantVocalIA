@@ -40,7 +40,7 @@ type MessageHandler = (msg: WsResponse) => void;
 const WS_URL_BASE =
   process.env.NEXT_PUBLIC_BACKEND_WS_URL ?? "ws://localhost:8090/ws";
 
-const BACKEND_HTTP_URL = WS_URL_BASE
+export const BACKEND_HTTP_URL = WS_URL_BASE
   .replace(/^wss:\/\//, "https://")
   .replace(/^ws:\/\//, "http://")
   .replace(/\/ws$/, "");

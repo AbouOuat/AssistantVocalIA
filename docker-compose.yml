@@ -38,9 +38,9 @@ services:
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       SECRET_KEY: ${SECRET_KEY}
-      N8N_API_URL: ${N8N_API_URL}
-      N8N_API_KEY: ${N8N_API_KEY}
-      GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL}
+      N8N_API_URL: ${N8N_API_URL:-}
+      N8N_API_KEY: ${N8N_API_KEY:-}
+      GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -48,8 +48,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - .:/app
 
   frontend:
     build:
@@ -57,12 +55,8 @@ services:
       dockerfile: Dockerfile.frontend
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.next
     environment:
-      NEXT_PUBLIC_BACKEND_WS_URL: ws://localhost:8000/ws
+      NEXT_PUBLIC_BACKEND_WS_URL: ws://145.223.34.178:8000/ws
     depends_on:
       - backend
 

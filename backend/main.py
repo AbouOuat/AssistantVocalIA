@@ -73,6 +73,8 @@ app.add_middleware(
         "http://localhost:5173",
         "http://145.223.34.178:3000",
         "http://145.223.34.178",
+        "https://jarvis.obyz.biz",
+        "http://jarvis.obyz.biz",
     ],
     allow_credentials=True,
     allow_methods=["*"],

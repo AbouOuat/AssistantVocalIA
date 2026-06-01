@@ -1,5 +1,6 @@
 """n8n Integration Service — déclencher des workflows d'automation."""
 
+import asyncio
 import httpx
 import logging
 from typing import Optional
@@ -58,18 +59,34 @@ async def trigger_automation(workflow_name: str, params: dict) -> str:
     return f"Échec déclenchement automation '{workflow_name}'"
 
 
-async def call_webhook(webhook_path: str, payload: dict, timeout: float = 30.0) -> Optional[dict]:
-    """Appelle un webhook n8n et retourne la réponse JSON."""
+async def call_webhook(
+    webhook_path: str,
+    payload: dict,
+    timeout: float = 30.0,
+    max_retries: int = 1,
+) -> Optional[dict]:
+    """Appelle un webhook n8n et retourne la réponse JSON.
+    Réessaie max_retries fois avec backoff exponentiel (2s, 4s...).
+    """
     if not settings.N8N_API_URL:
         return None
     base = settings.N8N_API_URL.replace("/api/v1", "").rstrip("/")
     url = f"{base}/webhook/{webhook_path}"
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload)
-            if resp.status_code == 200:
-                return resp.json()
-            logger.warning(f"[n8n] webhook {webhook_path} → HTTP {resp.status_code}")
-    except Exception as e:
-        logger.warning(f"[n8n] webhook {webhook_path} indisponible: {e}")
+
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"[n8n] {webhook_path} → HTTP {resp.status_code} (tentative {attempt + 1})")
+        except Exception as e:
+            logger.warning(f"[n8n] {webhook_path} indisponible (tentative {attempt + 1}): {e}")
+
+        if attempt < max_retries:
+            wait = 2 ** attempt  # 2s, 4s...
+            logger.info(f"[n8n] Nouvelle tentative dans {wait}s...")
+            await asyncio.sleep(wait)
+
+    logger.error(f"[n8n] {webhook_path} — échec après {max_retries + 1} tentative(s)")
     return None

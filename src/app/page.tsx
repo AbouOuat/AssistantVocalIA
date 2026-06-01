@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import { VoiceOrb } from "@/components/VoiceOrb";
 import { Waveform } from "@/components/Waveform";
 import { LiveTranscript } from "@/components/LiveTranscript";
@@ -19,6 +20,7 @@ export default function Home() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [inputText, setInputText] = useState("");
   const [realtimeMode, setRealtimeMode] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const streamingIdRef = useRef<string | null>(null);
   const rtAssistantIdRef = useRef<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -35,6 +37,7 @@ export default function Home() {
       }
       if (msg.type === "response" && msg.content === "__disconnected__") {
         setConnected(false);
+        toast.warning("Connexion perdue — reconnexion en cours...");
         return;
       }
 
@@ -47,6 +50,21 @@ export default function Home() {
             m.id === sid ? { ...m, content: m.content + msg.content } : m
           );
         });
+        return;
+      }
+
+      // Message de progression pendant un appel n8n long
+      if (msg.type === "progress" && msg.message) {
+        setProgressMessage(msg.message);
+        setOrbState("speaking");
+        return;
+      }
+
+      // Erreur backend → toast + reset état
+      if (msg.type === "error" && msg.message) {
+        toast.error(msg.message);
+        setProgressMessage(null);
+        setOrbState("idle");
         return;
       }
 
@@ -70,6 +88,7 @@ export default function Home() {
         });
         // voice_origin=true : la réponse vient d'une commande vocale,
         // l'audio est déjà géré par voice_response ou tts — ne pas toucher l'orb
+        setProgressMessage(null);
         if (!msg.voice_origin) setOrbState("idle");
         return;
       }
@@ -240,6 +259,7 @@ export default function Home() {
         await jarvisRT.startCapture();
         setOrbState("listening");
       } catch {
+        toast.error("Micro inaccessible — vérifie les permissions du navigateur.");
         setOrbState("idle");
       }
       return;
@@ -268,6 +288,7 @@ export default function Home() {
       mediaRecorderRef.current = recorder;
       setOrbState("listening");
     } catch {
+      toast.error("Micro inaccessible — vérifie les permissions du navigateur.");
       setOrbState("idle");
     }
   }, [orbState, realtimeMode]);
@@ -289,7 +310,21 @@ export default function Home() {
       <section className="flex flex-col items-center gap-4 py-8">
         <VoiceOrb state={orbState} onClick={toggleListening} />
         <Waveform active={orbState === "speaking"} />
-        <LiveTranscript text={liveTranscript} visible={orbState !== "idle"} />
+        <AnimatePresence>
+          {progressMessage && (
+            <motion.p
+              key="progress"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: [0.6, 1, 0.6] }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              className="text-[13px] font-mono text-voice-active text-center px-4"
+            >
+              {progressMessage}
+            </motion.p>
+          )}
+        </AnimatePresence>
+        <LiveTranscript text={liveTranscript} visible={orbState !== "idle" && !progressMessage} />
       </section>
 
       {/* Chat */}

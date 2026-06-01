@@ -1,0 +1,79 @@
+{
+  "name": "[DEV] Send Outlook Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-outlook-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-400, 200],
+      "webhookId": "send-outlook-email"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = items[0].json.body || {};\nconst to = body.to || '';\nconst subject = body.subject || 'Message de Jarvis';\nconst content = body.body || '';\nif (!to) {\n  return [{ json: { ok: false, error: 'Destinataire manquant' } }];\n}\nreturn [{ json: { to, subject, content } }];"
+      },
+      "id": "validate-input",
+      "name": "Valider parametres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  message: {\n    subject: $json.subject,\n    body: {\n      contentType: 'Text',\n      content: $json.content\n    },\n    toRecipients: [\n      { emailAddress: { address: $json.to } }\n    ]\n  },\n  saveToSentItems: true\n} }}",
+        "options": {}
+      },
+      "id": "graph-send",
+      "name": "Graph - Envoyer email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 200],
+      "continueOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: $json.statusCode === undefined || $json.statusCode === 202, sent_to: $('Valider parametres').first().json.to, subject: $('Valider parametres').first().json.subject }) }}"
+      },
+      "id": "respond-success",
+      "name": "Repondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [320, 200]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis": {
+      "main": [[{ "node": "Valider parametres", "type": "main", "index": 0 }]]
+    },
+    "Valider parametres": {
+      "main": [[{ "node": "Graph - Envoyer email", "type": "main", "index": 0 }]]
+    },
+    "Graph - Envoyer email": {
+      "main": [[{ "node": "Repondre Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "hackathon", "outlook"]
+}

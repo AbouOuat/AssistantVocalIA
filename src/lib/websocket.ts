@@ -12,6 +12,8 @@ export type WsResponseType =
   | "response"
   | "voice_response"
   | "tts"
+  | "progress"
+  | "error"
   | "memory_ack"
   | "memory_data"
   | "session_summary";
@@ -35,6 +37,7 @@ export interface WsResponse {
   value?: unknown;
   summary?: string;
   voice_origin?: boolean;
+  message?: string;
 }
 
 type MessageHandler = (msg: WsResponse) => void;

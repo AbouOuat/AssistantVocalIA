@@ -1,5 +1,6 @@
 """Jarvis Backend — FastAPI + WebSocket pipeline complet."""
 
+import asyncio
 import json
 import logging
 import os
@@ -37,6 +38,10 @@ _realtime_ok: bool = False
 
 # Contextes de conversation par connexion WebSocket (keyed by user_id)
 _contexts: dict[int, ConversationContext] = {}
+
+# État de dictée par utilisateur (machine à états Dictée Avocat)
+# { user_id: { "mode": "waiting_dictation" | "waiting_confirmation", "draft": str, "title": str } }
+_dictation_state: dict[int, dict] = {}
 
 
 @asynccontextmanager
@@ -83,6 +88,83 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+async def _send_ws(websocket: WebSocket, payload: dict) -> None:
+    """Envoie un message WebSocket sans lever d'exception si la connexion est fermée."""
+    try:
+        await websocket.send_text(json.dumps(payload))
+    except Exception:
+        pass
+
+
+def _get_progress_steps(text: str) -> list[str]:
+    """Retourne les messages de progression selon la commande détectée."""
+    t = text.lower()
+    if any(k in t for k in ["outlook", "emails outlook", "email avocat"]):
+        return [
+            "🔍 Connexion à Outlook...",
+            "🤖 Analyse IA des emails...",
+            "📬 Finalisation de la synthèse...",
+        ]
+    if any(k in t for k in ["classify", "email summary", "synthèse emails", "synthese emails",
+                              "derniers mails", "analyze my last"]):
+        return [
+            "🔍 Lecture des emails Gmail...",
+            "🤖 Classification IA...",
+            "📬 Synthèse en cours...",
+        ]
+    if any(k in t for k in ["start my day", "morning briefing", "commence ma journée"]):
+        return ["🌤️ Récupération météo & agenda..."]
+    if any(k in t for k in ["analyze my notes", "analyse mes notes"]):
+        return ["🧠 Analyse de tes notes..."]
+    return []
+
+
+async def _format_compte_rendu(transcript: str) -> dict:
+    """Formate une dictée brute en compte-rendu structuré via GPT-4o (JSON mode)."""
+    from backend.services.ai_service import _get_client
+    from backend.config import get_settings as _gs
+    today = __import__("datetime").date.today().isoformat()
+    system_prompt = (
+        "Tu es un assistant juridique expert. "
+        "Formate ce compte-rendu de réunion en JSON structuré. "
+        "Champs requis : titre (string), date (YYYY-MM-DD ou 'Non précisée'), "
+        "participants (liste de strings), points_discutes (liste de strings), "
+        "decisions (liste de strings), actions (liste de strings avec responsable si mentionné). "
+        f"Date du jour si non précisée : {today}. "
+        "Sois précis, professionnel, neutre. Ne jamais inventer de faits non mentionnés."
+    )
+    client = _get_client()
+    resp = await client.chat.completions.create(
+        model=_gs().OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Dictée à formater :\n\n{transcript}"},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+        max_tokens=1000,
+    )
+    try:
+        data = json.loads(resp.choices[0].message.content)
+    except Exception:
+        data = {"titre": "Compte-rendu", "date": today, "participants": [],
+                "points_discutes": [transcript], "decisions": [], "actions": []}
+
+    def _list_md(items: list, icon: str = "•") -> str:
+        return "\n".join(f"{icon} {i}" for i in items) if items else f"{icon} Aucun"
+
+    markdown = (
+        f"## 📋 {data.get('titre', 'Compte-rendu de réunion')}\n"
+        f"**Date :** {data.get('date', today)}\n\n"
+        f"**Participants :** {', '.join(data.get('participants', [])) or 'Non précisés'}\n\n"
+        f"### Points discutés\n{_list_md(data.get('points_discutes', []))}\n\n"
+        f"### Décisions\n{_list_md(data.get('decisions', []))}\n\n"
+        f"### Actions\n{_list_md(data.get('actions', []))}"
+    )
+    data["markdown"] = markdown
+    return data
 
 
 def _parse_email_limit(text: str) -> int:
@@ -265,6 +347,25 @@ async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None
             vocal += " Un email draft a été créé."
         return chat, vocal
 
+    # ── Compte-rendu de réunion (Dictée Avocat) ──────────────────────────────
+    DICTATION_KEYWORDS = [
+        "compte-rendu", "compte rendu", "rédige un compte", "note de réunion",
+        "résumé de réunion", "resume de reunion", "meeting notes", "procès-verbal",
+        "pv de réunion", "pv reunion", "redige un compte", "dictee reunion",
+    ]
+    if any(k in t for k in DICTATION_KEYWORDS):
+        _dictation_state[user_id] = {"mode": "waiting_dictation"}
+        chat = (
+            "🎙️ **Mode dictée activé.**\n\n"
+            "Décris ta réunion : participants, points discutés, décisions prises, actions à suivre.\n\n"
+            "Dis **« c'est tout »** ou **« terminé »** quand tu as fini."
+        )
+        vocal = (
+            "Mode dictée activé. Je t'écoute. "
+            "Décris ta réunion et dis c'est tout quand tu as terminé."
+        )
+        return chat, vocal
+
     return None
 
 
@@ -316,80 +417,179 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 if not content:
                     continue
                 ctx = _contexts[user_id]
-                full_response = ""
 
-                # Détection des commandes quick actions → n8n
-                n8n_result = await _handle_n8n_command(content, user_id)
+                # Progress ticker pour les commandes n8n longues
+                steps = _get_progress_steps(content)
+                ticker_task: asyncio.Task | None = None
+                if steps:
+                    await _send_ws(websocket, {"type": "progress", "message": steps[0]})
+                    if len(steps) > 1:
+                        async def _ticker(remaining=steps[1:]):
+                            for step in remaining:
+                                await asyncio.sleep(10)
+                                await _send_ws(websocket, {"type": "progress", "message": step})
+                        ticker_task = asyncio.create_task(_ticker())
+
+                try:
+                    n8n_result = await _handle_n8n_command(content, user_id)
+                finally:
+                    if ticker_task:
+                        ticker_task.cancel()
+
                 if n8n_result:
                     chat_text, vocal_text = n8n_result
                     ctx.add_message("user", content)
                     ctx.add_message("assistant", chat_text)
-                    await websocket.send_text(json.dumps({
-                        "type": "response",
-                        "content": chat_text,
-                    }))
-                    # Synthèse vocale du résumé court (non bloquant pour l'affichage)
+                    await _send_ws(websocket, {"type": "response", "content": chat_text})
                     try:
                         tts_audio = await text_to_speech(vocal_text)
-                        await websocket.send_text(json.dumps({
-                            "type": "tts",
-                            "audio": encode_audio_base64(tts_audio),
-                        }))
+                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(tts_audio)})
                     except Exception as tts_err:
                         logger.warning(f"TTS n8n response failed: {tts_err}")
                     continue
 
                 # Streaming GPT-4o standard
+                full_response = ""
                 async for chunk in chat_completion_stream(content, ctx):
                     full_response += chunk
-                    await websocket.send_text(json.dumps({
-                        "type": "stream_chunk",
-                        "content": chunk,
-                    }))
+                    await _send_ws(websocket, {"type": "stream_chunk", "content": chunk})
 
-                await websocket.send_text(json.dumps({
-                    "type": "response",
-                    "content": full_response,
-                }))
+                await _send_ws(websocket, {"type": "response", "content": full_response})
 
             # ── Audio voix ──────────────────────────────────────────────────
             elif msg_type == "voice_input":
                 audio_b64 = message.get("audio", "")
                 if not audio_b64:
                     continue
-                audio_bytes = decode_audio_base64(audio_b64)
+                try:
+                    audio_bytes = decode_audio_base64(audio_b64)
+                except Exception:
+                    await _send_ws(websocket, {
+                        "type": "error",
+                        "message": "Audio invalide — réessaie.",
+                    })
+                    continue
 
-                # STT d'abord pour pouvoir détecter les commandes n8n
-                transcript = await transcribe_audio(audio_bytes)
+                # STT
+                try:
+                    transcript = await transcribe_audio(audio_bytes)
+                except Exception as e:
+                    logger.error(f"STT error [user_id={user_id}]: {e}")
+                    await _send_ws(websocket, {
+                        "type": "error",
+                        "message": "Transcription échouée — vérifie ta connexion et réessaie.",
+                    })
+                    continue
 
-                # Commande n8n ? → vocal summary + texte complet
+                # ── Machine à états Dictée Avocat ───────────────────────────
+                dstate = _dictation_state.get(user_id)
+
+                if dstate and dstate["mode"] == "waiting_dictation":
+                    # L'utilisateur vient de dicter sa réunion
+                    await _send_ws(websocket, {
+                        "type": "voice_response",
+                        "transcript": transcript,
+                        "audio": encode_audio_base64(
+                            await text_to_speech("Parfait, je formate ton compte-rendu.") or b""
+                        ),
+                    })
+                    await _send_ws(websocket, {"type": "progress", "message": "📝 Formatage du compte-rendu..."})
+                    try:
+                        data = await _format_compte_rendu(transcript)
+                        _dictation_state[user_id] = {
+                            "mode": "waiting_confirmation",
+                            "draft": data["markdown"],
+                            "title": data.get("titre", "Compte-rendu"),
+                            "raw": data,
+                        }
+                        chat_text = data["markdown"] + "\n\n---\n💬 **Je t'envoie ça par Outlook ?** (oui / non)"
+                        vocal_text = f"Voici ton compte-rendu : {data.get('titre', 'compte-rendu de réunion')}. Je te l'envoie par Outlook ?"
+                        await _send_ws(websocket, {"type": "response", "content": chat_text, "voice_origin": True})
+                        audio_response = await text_to_speech(vocal_text)
+                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(audio_response)})
+                    except Exception as e:
+                        logger.error(f"Compte-rendu format error: {e}")
+                        _dictation_state.pop(user_id, None)
+                        await _send_ws(websocket, {
+                            "type": "error",
+                            "message": "Erreur lors du formatage du compte-rendu. Réessaie.",
+                        })
+                    continue
+
+                if dstate and dstate["mode"] == "waiting_confirmation":
+                    t_lower = transcript.lower().strip()
+                    confirmed = any(k in t_lower for k in ["oui", "yes", "envoie", "envoie-le", "vas-y", "ok", "affirmatif"])
+                    cancelled = any(k in t_lower for k in ["non", "no", "annule", "cancel", "pas", "stop"])
+
+                    if confirmed:
+                        _dictation_state.pop(user_id, None)
+                        await _send_ws(websocket, {
+                            "type": "voice_response", "transcript": transcript,
+                            "audio": encode_audio_base64(await text_to_speech("Envoi en cours...") or b""),
+                        })
+                        result = await call_webhook("send-outlook-email", {
+                            "to": "ouat.abou34@outlook.fr",
+                            "subject": dstate.get("title", "Compte-rendu de réunion"),
+                            "body": dstate.get("draft", ""),
+                        })
+                        if result and result.get("ok"):
+                            sent_to = result.get("sent_to", "ouat.abou34@outlook.fr")
+                            chat_ok = f"✅ Compte-rendu envoyé à **{sent_to}**."
+                            vocal_ok = f"Compte-rendu envoyé avec succès."
+                        else:
+                            chat_ok = "⚠️ Envoi échoué — vérifie le workflow n8n send-outlook-email."
+                            vocal_ok = "L'envoi a échoué. Vérifie le workflow n8n."
+                        await _send_ws(websocket, {"type": "response", "content": chat_ok, "voice_origin": True})
+                        audio_response = await text_to_speech(vocal_ok)
+                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(audio_response)})
+                    elif cancelled:
+                        _dictation_state.pop(user_id, None)
+                        msg = "📋 Compte-rendu conservé localement. Envoi annulé."
+                        await _send_ws(websocket, {"type": "response", "content": msg, "voice_origin": True})
+                        audio_response = await text_to_speech("Envoi annulé. Le compte-rendu est affiché dans le chat.")
+                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(audio_response)})
+                    else:
+                        # Réponse ambiguë → reposer la question
+                        msg = "❓ Je n'ai pas compris. Dis **oui** pour envoyer ou **non** pour annuler."
+                        await _send_ws(websocket, {"type": "response", "content": msg, "voice_origin": True})
+                        audio_response = await text_to_speech("Dis oui pour envoyer ou non pour annuler.")
+                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(audio_response)})
+                    continue
+
+                # ── Commande n8n ? ──────────────────────────────────────────
                 n8n_result = await _handle_n8n_command(transcript, user_id)
                 if n8n_result:
                     chat_text, vocal_text = n8n_result
-                    audio_response = await text_to_speech(vocal_text)
-                    # voice_response : montre la transcription + joue l'audio vocal
-                    await websocket.send_text(json.dumps({
+                    try:
+                        audio_response = await text_to_speech(vocal_text)
+                    except Exception:
+                        audio_response = b""
+                    await _send_ws(websocket, {
                         "type": "voice_response",
                         "transcript": transcript,
                         "audio": encode_audio_base64(audio_response),
-                    }))
-                    # response : affiche le texte complet dans le chat sans changer l'orb
-                    await websocket.send_text(json.dumps({
-                        "type": "response",
-                        "content": chat_text,
-                        "voice_origin": True,
-                    }))
+                    })
+                    await _send_ws(websocket, {"type": "response", "content": chat_text, "voice_origin": True})
                     continue
 
-                # Pas de commande n8n → pipeline IA standard
+                # ── Pipeline IA standard ────────────────────────────────────
                 ctx = _contexts[user_id]
-                reply_text = await chat_completion(transcript, ctx)
-                audio_response = await text_to_speech(reply_text)
-                await websocket.send_text(json.dumps({
+                try:
+                    reply_text = await chat_completion(transcript, ctx)
+                    audio_response = await text_to_speech(reply_text)
+                except Exception as e:
+                    logger.error(f"AI pipeline error [user_id={user_id}]: {e}")
+                    await _send_ws(websocket, {
+                        "type": "error",
+                        "message": "Erreur IA — réessaie dans un instant.",
+                    })
+                    continue
+
+                await _send_ws(websocket, {
                     "type": "voice_response",
                     "transcript": transcript,
                     "audio": encode_audio_base64(audio_response),
-                }))
+                })
 
             # ── Memory set ──────────────────────────────────────────────────
             elif msg_type == "memory_set":
@@ -448,8 +648,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
         pass
     except Exception as e:
         logger.error(f"WebSocket error [user_id={user_id}]: {e}")
+        await _send_ws(websocket, {
+            "type": "error",
+            "message": "Une erreur inattendue s'est produite. Reconnecte-toi si le problème persiste.",
+        })
     finally:
         _contexts.pop(user_id, None)
+        _dictation_state.pop(user_id, None)
         logger.info(f"✗ Client WebSocket déconnecté [user_id={user_id}]")
 
 

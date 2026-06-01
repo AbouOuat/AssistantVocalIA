@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
@@ -82,34 +83,101 @@ app.add_middleware(
 )
 
 
+def _parse_email_limit(text: str) -> int:
+    """Extrait et valide la limite d'emails depuis le texte utilisateur."""
+    match = re.search(r'\b(\d+)\b', text)
+    if not match:
+        return 10
+    limit = int(match.group(1))
+    if limit < 1:
+        return 1
+    if limit > 50:
+        return 50
+    return limit
+
+
 async def _handle_n8n_command(text: str, user_id: int) -> str | None:
     """Détecte les commandes quick actions et appelle le webhook n8n correspondant."""
     t = text.lower().strip()
 
-    # Morning Briefing
-    if any(k in t for k in ["start my day", "morning briefing", "commence ma journée", "bonjour jarvis"]):
+    # ── Morning Briefing ─────────────────────────────────────────────────────
+    if any(k in t for k in ["start my day", "morning briefing", "commence ma journée"]):
         result = await call_webhook("morning-briefing", {"user_id": user_id})
-        if result and result.get("briefing"):
-            return result["briefing"]
-        return "Le Morning Briefing n8n n'est pas encore actif. Active le workflow dans n8n.obyz.biz et configure les credentials Gmail + OpenWeather."
+        if not result:
+            return (
+                "⚠️ Le workflow Morning Briefing est injoignable.\n"
+                "→ Vérifie que le workflow '[DEV] Morning Briefing' est actif sur n8n.obyz.biz."
+            )
+        return result.get("briefing", "Briefing reçu mais format inattendu.")
 
-    # Emails prioritaires
-    if "check" in t and "email" in t or ("emails" in t and "priorit" in t):
+    # ── Classification / récapitulatif emails ────────────────────────────────
+    CLASSIFY_KEYWORDS = [
+        "classify", "classif", "classify emails", "classify my emails",
+        "email summary", "synthèse emails", "synthese emails",
+        "récapitulatif", "recapitulatif", "résumé des mails", "resume des mails",
+        "analyse mes", "analyze my last", "last emails", "derniers mails",
+    ]
+    if any(k in t for k in CLASSIFY_KEYWORDS) or (
+        any(k in t for k in ["email", "mail", "mails", "emails"]) and
+        any(k in t for k in ["analyse", "analyze", "résumé", "resume", "classify", "class"])
+    ):
+        limit = _parse_email_limit(t)
+        limit_note = " (limité à 50 par sécurité)" if re.search(r'\b(\d+)\b', t) and int(re.search(r'\b(\d+)\b', t).group(1)) > 50 else ""
+
+        result = await call_webhook("email-classifier", {"user_id": user_id, "limit": limit})
+
+        if not result:
+            return (
+                "⚠️ Le workflow de classification emails est injoignable.\n"
+                "→ Vérifie que le workflow '[DEV] Gmail Email Classifier' est actif sur n8n.obyz.biz\n"
+                "→ Et que le credential Gmail est configuré."
+            )
+
+        processed = result.get("processed", 0)
+        skipped = result.get("skipped", 0)
+
+        if result.get("no_emails") or processed == 0:
+            if skipped > 0:
+                return (
+                    f"📭 Aucun email à classifier parmi les {limit} derniers{limit_note}.\n"
+                    f"{skipped} email(s) ignoré(s) automatiquement (newsletters, no-reply, trop anciens)."
+                )
+            return f"✅ Aucun nouvel email dans les 8 dernières heures{limit_note}."
+
+        summary = result.get("summary", "")
+        header = f"📧 Classification de tes {processed} dernier(s) email(s){limit_note} :\n\n"
+        footer = f"\n\n✉️ Synthèse envoyée à {result.get('summary_sent_to', 'ton Gmail')}."
+        return header + summary + footer
+
+    # ── Check emails prioritaires (Morning Briefing) ─────────────────────────
+    if ("check" in t and "email" in t) or ("emails" in t and "priorit" in t):
         result = await call_webhook("morning-briefing", {"user_id": user_id})
-        if result and result.get("briefing"):
-            return f"📧 Tes emails prioritaires :\n\n{result['briefing']}"
-        return "Je ne peux pas accéder à Gmail pour l'instant — active le workflow n8n Morning Briefing avec ton credential Gmail."
+        if not result:
+            return (
+                "⚠️ Impossible d'accéder à Gmail pour l'instant.\n"
+                "→ Active le workflow Morning Briefing dans n8n.obyz.biz."
+            )
+        return f"📧 Tes emails prioritaires :\n\n{result.get('briefing', 'Aucune donnée.')}"
 
-    # Smart Agent — analyse de notes
+    # ── Smart Agent — analyse de notes ────────────────────────────────────────
     if any(k in t for k in ["analyze my notes", "analyse mes notes", "my notes"]):
         notes = text.split(":", 1)[-1].strip() if ":" in text else ""
         if not notes:
-            return "Envoie-moi tes notes à analyser. Exemple : \"Analyze my notes: réunion lundi, budget Q3, relancer client X\""
+            return (
+                "📝 Envoie-moi tes notes à analyser.\n"
+                "Exemple : \"Analyze my notes: réunion lundi, budget Q3, relancer client X\""
+            )
         result = await call_webhook("smart-agent", {"user_id": user_id, "notes": notes})
-        if result and result.get("action_plan"):
-            plan = "\n".join(f"• {step}" for step in result["action_plan"])
-            return f"📋 Plan d'action :\n\n{plan}\n\n{'📩 Email draft créé et envoyé.' if result.get('email_sent') else ''}"
-        return "Le workflow Smart Agent n8n n'est pas encore actif."
+        if not result:
+            return (
+                "⚠️ Le workflow Smart Agent est injoignable.\n"
+                "→ Active le workflow dans n8n.obyz.biz et configure le credential OpenAI."
+            )
+        if not result.get("action_plan"):
+            return "⚠️ L'analyse n'a pas retourné de plan d'action. Réessaie avec des notes plus détaillées."
+        plan = "\n".join(f"• {step}" for step in result["action_plan"])
+        email_status = "📩 Email draft créé et envoyé." if result.get("email_sent") else ""
+        return f"📋 Plan d'action :\n\n{plan}\n\n{email_status}".strip()
 
     return None
 

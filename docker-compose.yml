@@ -67,6 +67,7 @@ services:
       GENERIC_TIMEZONE: Europe/Paris
       N8N_USER_MANAGEMENT_JWT_SECRET: ${SECRET_KEY}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
     volumes:
       - n8n_data:/home/node/.n8n
 

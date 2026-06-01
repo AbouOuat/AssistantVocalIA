@@ -66,6 +66,7 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-jarvis-n8n-2026-secret}
       GENERIC_TIMEZONE: Europe/Paris
       N8N_USER_MANAGEMENT_JWT_SECRET: ${SECRET_KEY}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
     volumes:
       - n8n_data:/home/node/.n8n
 

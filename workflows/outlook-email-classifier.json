@@ -1,0 +1,273 @@
+{
+  "name": "[DEV] Outlook Email Classifier",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Démarrage manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1456, 48]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,12,18 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Planification 8h 12h 18h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1456, 240]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "outlook-email-classifier",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-1456, 432],
+      "webhookId": "outlook-email-classifier"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limite depuis le webhook si dispo, sinon défaut 10, toujours 1-50\nlet limit = 10;\nconst summaryRecipient = 'aboubakary_ouattara@hotmail.com';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) { /* trigger sans body — valeur par défaut */ }\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+      },
+      "id": "config-node",
+      "name": "Configuration MVP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1216, 240]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top={{ $json.maxEmails }}&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,body,importance,categories,hasAttachments,webLink",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "graph-read",
+      "name": "Graph - Lire emails recents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-976, 240],
+      "continueOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuration MVP').first().json;\nconst messages = (items[0].json.value || items[0].json.error ? [] : []).concat(items[0].json.value || []);\nconst excludedSenderFragments = [\n  'no-reply', 'noreply', 'newsletter', 'notification', 'notifications',\n  'marketing', 'facebookmail', 'linkedin', 'microsoft-noreply'\n];\nconst excludedSubjectFragments = [\n  'newsletter', 'desabonnement', 'désabonnement', 'promotion',\n  'notification automatique', 'alerte automatique', 'absence du bureau', 'automatic reply'\n];\nconst cutoff = new Date(Date.now() - Number(cfg.lookbackHours || 8) * 60 * 60 * 1000);\nconst prepared = [];\nconst skipped = [];\nfor (const m of messages) {\n  const categories = Array.isArray(m.categories) ? m.categories : [];\n  const sender = (m.from?.emailAddress?.address || '').toLowerCase();\n  const senderName = m.from?.emailAddress?.name || '';\n  const subject = m.subject || '(sans objet)';\n  const subjectLower = subject.toLowerCase();\n  const receivedAt = new Date(m.receivedDateTime);\n  const alreadyProcessed = categories.includes('IA - Traite') || categories.includes('IA - Exclu');\n  const excludedBySender = excludedSenderFragments.some(x => sender.includes(x));\n  const excludedBySubject = excludedSubjectFragments.some(x => subjectLower.includes(x));\n  const tooOld = Number.isFinite(receivedAt.getTime()) && receivedAt < cutoff;\n  if (alreadyProcessed || excludedBySender || excludedBySubject || tooOld) {\n    skipped.push({\n      id: m.id, subject, sender,\n      reason: alreadyProcessed ? 'deja_traite' : excludedBySender ? 'expediteur_exclu' : excludedBySubject ? 'objet_exclu' : 'trop_ancien'\n    });\n    continue;\n  }\n  const bodyText = (m.body?.content || m.bodyPreview || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .slice(0, 4000);\n  prepared.push({\n    id: m.id, subject, sender, senderName,\n    receivedDateTime: m.receivedDateTime,\n    importance: m.importance, categories,\n    hasAttachments: Boolean(m.hasAttachments),\n    webLink: m.webLink, bodyText\n  });\n}\nreturn [{ json: { emails: prepared, skipped, no_emails: prepared.length === 0, runAt: new Date().toISOString() } }];"
+      },
+      "id": "prepare-node",
+      "name": "Preparer lot emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-736, 240],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.no_emails }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equal" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-no-emails",
+      "name": "Emails presents ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-496, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, no_emails: true, processed: 0, skipped: $('Preparer lot emails').first().json.skipped.length, summary: '', summary_sent_to: $('Configuration MVP').first().json.summaryRecipient, urgent_count: 0 }) }}"
+      },
+      "id": "respond-empty",
+      "name": "Repondre - Aucun email",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-256, 96]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $('Configuration MVP').first().json.openAiModel,\n  text: { format: { type: 'json_object' } },\n  temperature: 0.1,\n  input: [\n    {\n      role: 'system',\n      content: 'Tu classes des emails pour un cabinet d avocat. Reponds uniquement en JSON valide. N invente pas de faits. Un email peut avoir plusieurs etiquettes. Ne propose jamais un envoi automatique. Les brouillons doivent rester prudents et validables.'\n    },\n    {\n      role: 'user',\n      content: JSON.stringify({\n        consigne: 'Classe chaque email. Champs attendus: id, urgence=haute|moyenne|faible, interlocuteur=client|confrere|juridiction|expert|assureur|notaire|mandant_immobilier|administration|autre|indetermine, action=repondre|lire|relancer|classer|aucune, echeance_detectee=true|false, date_echeance=YYYY-MM-DD ou null, resume=phrase courte, raison_urgence=phrase courte ou vide, brouillon_recommande=true|false, brouillon=texte court ou vide. Ajoute aussi global_summary en 5 lignes maximum.',\n        criteres_urgence: ['date limite proche','audience','convocation','delai','assignation','ordonnance','jugement','conclusions','message juridiction','demande de signature rapide','relance avec delai','termes urgent ou imperatif'],\n        emails: $json.emails\n      })\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "openai-classify",
+      "name": "OpenAI - Classer et resumer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-256, 384],
+      "continueOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5M4kmujo7Cv8RjjE",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Preparer lot emails').first().json;\nfunction extractResponseText(response) {\n  if (response.output_text) return response.output_text;\n  const output = response.output || [];\n  const chunks = [];\n  for (const item of output) {\n    for (const content of item.content || []) {\n      if (content.type === 'output_text' && content.text) chunks.push(content.text);\n      if (content.type === 'text' && content.text) chunks.push(content.text);\n    }\n  }\n  return chunks.join('\\n') || '{}';\n}\nconst content = extractResponseText(items[0].json);\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { emails: [], global_summary: 'Erreur de parsing de la réponse IA.' };\n}\nconst originalsById = new Map((source.emails || []).map(e => [e.id, e]));\nconst analyses = (parsed.emails || []).map(a => {\n  const original = originalsById.get(a.id) || {};\n  const categories = new Set(original.categories || []);\n  const urgency = String(a.urgence || 'faible').toLowerCase();\n  const action = String(a.action || 'aucune').toLowerCase();\n  if (urgency === 'haute') categories.add('IA - Urgent');\n  if (action === 'repondre') categories.add('IA - A repondre');\n  if (action === 'relancer') categories.add('IA - Relance');\n  if (action === 'lire') categories.add('IA - A lire');\n  if (action === 'classer') categories.add('IA - A classer');\n  if (a.echeance_detectee) categories.add('IA - Echeance');\n  categories.add('IA - Traite');\n  return { ...original, analyse: a, nextCategories: Array.from(categories) };\n});\nconst urgent = analyses.filter(x => x.analyse?.urgence === 'haute');\nconst repondre = analyses.filter(x => x.analyse?.action === 'repondre');\nconst echeances = analyses.filter(x => x.analyse?.echeance_detectee);\nconst drafts = analyses.filter(x => x.analyse?.brouillon_recommande && x.analyse?.brouillon);\nfunction line(x) {\n  const a = x.analyse || {};\n  return `• ${x.senderName || x.sender} | ${x.subject || '(sans objet)'} | ${a.resume || ''}${a.raison_urgence ? ' — ' + a.raison_urgence : ''}`;\n}\nconst summaryText = [\n  `🤖 Synthèse Outlook IA — ${new Date().toLocaleString('fr-FR')}`,\n  `Analysés : ${analyses.length} | Ignorés : ${(source.skipped || []).length}`,\n  '',\n  '🚨 Urgents',\n  urgent.length ? urgent.map(line).join('\\n') : '• Aucun email urgent.',\n  '',\n  '📩 À répondre',\n  repondre.length ? repondre.map(line).join('\\n') : '• Aucune réponse prioritaire.',\n  '',\n  '📅 Échéances détectées',\n  echeances.length ? echeances.map(x => `• ${x.analyse.date_echeance || 'date à confirmer'} | ${x.senderName || x.sender} | ${x.subject || '(sans objet)'} | ${x.analyse.resume || ''}`).join('\\n') : '• Aucune échéance.',\n  '',\n  '📝 Brouillons proposés',\n  drafts.length ? drafts.map(x => `• ${x.senderName || x.sender} | ${x.subject || '(sans objet)'}`).join('\\n') : '• Aucun brouillon.',\n  '',\n  '📋 Synthèse générale',\n  parsed.global_summary || '• Rien à signaler.',\n  '',\n  'ℹ️ Les pièces jointes ne sont pas analysées dans cette version.'\n].join('\\n');\nreturn [{ json: { analyses, summaryText, processedCount: analyses.length, skippedCount: (source.skipped || []).length, urgentCount: urgent.length, repondreCount: repondre.length } }];"
+      },
+      "id": "parse-node",
+      "name": "Parser analyse IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 384],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const analyses = items[0].json.analyses || [];\nreturn analyses.map(x => ({\n  json: {\n    id: x.id,\n    patchUrl: `https://graph.microsoft.com/v1.0/me/messages/${x.id}`,\n    categories: x.nextCategories,\n    subject: x.subject,\n    sender: x.sender\n  }\n}));"
+      },
+      "id": "build-categories",
+      "name": "Construire MAJ categories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [256, 256]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.patchUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { categories: $json.categories } }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "id": "graph-patch",
+      "name": "Graph - Appliquer categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [512, 256],
+      "retryOnFail": true,
+      "continueOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  message: {\n    subject: '🤖 Synthèse Outlook IA — Jarvis',\n    body: {\n      contentType: 'Text',\n      content: $('Parser analyse IA').first().json.summaryText\n    },\n    toRecipients: [\n      { emailAddress: { address: $('Configuration MVP').first().json.summaryRecipient } }\n    ]\n  },\n  saveToSentItems: true\n} }}",
+        "options": {}
+      },
+      "id": "graph-send",
+      "name": "Graph - Envoyer synthese",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [256, 512],
+      "continueOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, no_emails: false, processed: $('Parser analyse IA').first().json.processedCount, skipped: $('Parser analyse IA').first().json.skippedCount, summary: $('Parser analyse IA').first().json.summaryText, summary_sent_to: $('Configuration MVP').first().json.summaryRecipient, urgent_count: $('Parser analyse IA').first().json.urgentCount, repondre_count: $('Parser analyse IA').first().json.repondreCount }) }}"
+      },
+      "id": "respond-success",
+      "name": "Repondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [256, 640]
+    }
+  ],
+  "connections": {
+    "Démarrage manuel": {
+      "main": [[{ "node": "Configuration MVP", "type": "main", "index": 0 }]]
+    },
+    "Planification 8h 12h 18h": {
+      "main": [[{ "node": "Configuration MVP", "type": "main", "index": 0 }]]
+    },
+    "Webhook Jarvis": {
+      "main": [[{ "node": "Configuration MVP", "type": "main", "index": 0 }]]
+    },
+    "Configuration MVP": {
+      "main": [[{ "node": "Graph - Lire emails recents", "type": "main", "index": 0 }]]
+    },
+    "Graph - Lire emails recents": {
+      "main": [[{ "node": "Preparer lot emails", "type": "main", "index": 0 }]]
+    },
+    "Preparer lot emails": {
+      "main": [[{ "node": "Emails presents ?", "type": "main", "index": 0 }]]
+    },
+    "Emails presents ?": {
+      "main": [
+        [{ "node": "Repondre - Aucun email", "type": "main", "index": 0 }],
+        [{ "node": "OpenAI - Classer et resumer", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI - Classer et resumer": {
+      "main": [[{ "node": "Parser analyse IA", "type": "main", "index": 0 }]]
+    },
+    "Parser analyse IA": {
+      "main": [[
+        { "node": "Construire MAJ categories", "type": "main", "index": 0 },
+        { "node": "Graph - Envoyer synthese", "type": "main", "index": 0 },
+        { "node": "Repondre Webhook", "type": "main", "index": 0 }
+      ]]
+    },
+    "Construire MAJ categories": {
+      "main": [[{ "node": "Graph - Appliquer categories", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": ""
+  },
+  "tags": ["jarvis", "hackathon", "demo", "outlook"]
+}

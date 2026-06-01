@@ -11,6 +11,7 @@ export type WsResponseType =
   | "stream_chunk"
   | "response"
   | "voice_response"
+  | "tts"
   | "memory_ack"
   | "memory_data"
   | "session_summary";
@@ -33,6 +34,7 @@ export interface WsResponse {
   key?: string;
   value?: unknown;
   summary?: string;
+  voice_origin?: boolean;
 }
 
 type MessageHandler = (msg: WsResponse) => void;

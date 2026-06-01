@@ -10,13 +10,15 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
-from backend.services.ai_service import ConversationContext, chat_completion_stream
+from backend.services.ai_service import ConversationContext, chat_completion, chat_completion_stream
 from backend.services.memory_service import memory_service
 from backend.services.voice_service import (
     check_realtime_access,
     decode_audio_base64,
     encode_audio_base64,
     process_voice_message,
+    transcribe_audio,
+    text_to_speech,
 )
 from backend.services.realtime_service import realtime_session
 from backend.services.n8n_service import init_n8n, call_webhook
@@ -96,88 +98,172 @@ def _parse_email_limit(text: str) -> int:
     return limit
 
 
-async def _handle_n8n_command(text: str, user_id: int) -> str | None:
-    """Détecte les commandes quick actions et appelle le webhook n8n correspondant."""
+async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None:
+    """
+    Détecte les commandes quick actions et appelle le webhook n8n correspondant.
+    Retourne (chat_text, vocal_text) ou None si pas de commande reconnue.
+    - chat_text : texte complet affiché dans le chat
+    - vocal_text : résumé court (≤ 3 phrases) synthétisé en voix
+    """
     t = text.lower().strip()
 
     # ── Morning Briefing ─────────────────────────────────────────────────────
     if any(k in t for k in ["start my day", "morning briefing", "commence ma journée"]):
         result = await call_webhook("morning-briefing", {"user_id": user_id})
         if not result:
-            return (
+            msg = (
                 "⚠️ Le workflow Morning Briefing est injoignable.\n"
                 "→ Vérifie que le workflow '[DEV] Morning Briefing' est actif sur n8n.obyz.biz."
             )
-        return result.get("briefing", "Briefing reçu mais format inattendu.")
+            return msg, "Le workflow Morning Briefing est injoignable. Vérifie qu'il est actif sur n8n."
+        briefing = result.get("briefing", "Briefing reçu mais format inattendu.")
+        return briefing, "Voici ton briefing du matin. J'ai affiché le détail dans le chat."
 
-    # ── Classification / récapitulatif emails ────────────────────────────────
+    # ── Outlook Email Classifier ──────────────────────────────────────────────
+    OUTLOOK_KEYWORDS = [
+        "outlook", "emails outlook", "mes emails outlook", "mes mails outlook",
+        "email avocat", "emails avocat", "ma boite outlook", "analyse mes emails outlook",
+        "classifie mes emails outlook", "outlook mail", "boite outlook",
+    ]
+    is_outlook = any(k in t for k in OUTLOOK_KEYWORDS) or (
+        "outlook" in t and any(k in t for k in ["email", "mail", "analyse", "classify", "résumé", "resume", "synthese"])
+    )
+    if is_outlook:
+        limit = _parse_email_limit(t)
+        limit_note = " (limité à 50 par sécurité)" if re.search(r'\b(\d+)\b', t) and int(re.search(r'\b(\d+)\b', t).group(1)) > 50 else ""
+
+        result = await call_webhook(
+            "outlook-email-classifier",
+            {"user_id": user_id, "limit": limit},
+            timeout=45.0,
+        )
+
+        if not result:
+            msg = (
+                "⚠️ Le workflow Outlook Email Classifier est injoignable.\n"
+                "→ Vérifie que le workflow '[DEV] Outlook Email Classifier' est actif sur n8n.obyz.biz\n"
+                "→ Et que le credential Outlook OAuth2 est configuré."
+            )
+            return msg, "Le workflow Outlook est injoignable. Vérifie qu'il est actif sur n8n."
+
+        processed = result.get("processed", 0)
+        skipped = result.get("skipped", 0)
+        urgent_count = result.get("urgent_count", 0)
+        repondre_count = result.get("repondre_count", 0)
+        recipient = result.get("summary_sent_to", "ton Outlook")
+
+        if result.get("no_emails") or processed == 0:
+            if skipped > 0:
+                chat = (
+                    f"📭 Aucun email Outlook à classifier parmi les {limit} derniers{limit_note}.\n"
+                    f"{skipped} email(s) ignoré(s) automatiquement (déjà traités, newsletters, trop anciens)."
+                )
+                vocal = f"Aucun email Outlook à classifier parmi les {limit} derniers. {skipped} ignorés automatiquement."
+            else:
+                chat = f"✅ Aucun nouvel email Outlook dans les 8 dernières heures{limit_note}."
+                vocal = "Aucun nouvel email Outlook dans les 8 dernières heures."
+            return chat, vocal
+
+        summary = result.get("summary", "")
+        header = f"📬 Analyse de tes {processed} email(s) Outlook{limit_note} :\n\n"
+        footer = f"\n\n✉️ Synthèse envoyée à {recipient}."
+        chat = header + summary + footer
+
+        urgence_note = f"{urgent_count} urgent(s), " if urgent_count > 0 else ""
+        repondre_note = f"{repondre_count} à répondre" if repondre_count > 0 else "aucune réponse urgente"
+        vocal = (
+            f"J'ai analysé {processed} email(s) Outlook. "
+            f"{urgence_note}{repondre_note}. "
+            f"La synthèse a été envoyée sur {recipient}."
+        )
+        return chat, vocal
+
+    # ── Gmail Email Classifier ────────────────────────────────────────────────
     CLASSIFY_KEYWORDS = [
         "classify", "classif", "classify emails", "classify my emails",
         "email summary", "synthèse emails", "synthese emails",
         "récapitulatif", "recapitulatif", "résumé des mails", "resume des mails",
         "analyse mes", "analyze my last", "last emails", "derniers mails",
     ]
-    if any(k in t for k in CLASSIFY_KEYWORDS) or (
+    is_gmail_classify = any(k in t for k in CLASSIFY_KEYWORDS) or (
         any(k in t for k in ["email", "mail", "mails", "emails"]) and
         any(k in t for k in ["analyse", "analyze", "résumé", "resume", "classify", "class"])
-    ):
+    )
+    if is_gmail_classify:
         limit = _parse_email_limit(t)
         limit_note = " (limité à 50 par sécurité)" if re.search(r'\b(\d+)\b', t) and int(re.search(r'\b(\d+)\b', t).group(1)) > 50 else ""
 
         result = await call_webhook("email-classifier", {"user_id": user_id, "limit": limit})
 
         if not result:
-            return (
+            msg = (
                 "⚠️ Le workflow de classification emails est injoignable.\n"
                 "→ Vérifie que le workflow '[DEV] Gmail Email Classifier' est actif sur n8n.obyz.biz\n"
                 "→ Et que le credential Gmail est configuré."
             )
+            return msg, "Le workflow Gmail est injoignable. Vérifie qu'il est actif sur n8n."
 
         processed = result.get("processed", 0)
         skipped = result.get("skipped", 0)
 
         if result.get("no_emails") or processed == 0:
             if skipped > 0:
-                return (
+                chat = (
                     f"📭 Aucun email à classifier parmi les {limit} derniers{limit_note}.\n"
                     f"{skipped} email(s) ignoré(s) automatiquement (newsletters, no-reply, trop anciens)."
                 )
-            return f"✅ Aucun nouvel email dans les 8 dernières heures{limit_note}."
+                vocal = f"Aucun email Gmail à classifier. {skipped} ignorés automatiquement."
+            else:
+                chat = f"✅ Aucun nouvel email dans les 8 dernières heures{limit_note}."
+                vocal = "Aucun nouvel email Gmail dans les 8 dernières heures."
+            return chat, vocal
 
         summary = result.get("summary", "")
         header = f"📧 Classification de tes {processed} dernier(s) email(s){limit_note} :\n\n"
         footer = f"\n\n✉️ Synthèse envoyée à {result.get('summary_sent_to', 'ton Gmail')}."
-        return header + summary + footer
+        chat = header + summary + footer
+        vocal = f"J'ai analysé {processed} emails Gmail. Synthèse envoyée sur {result.get('summary_sent_to', 'ton Gmail')}."
+        return chat, vocal
 
     # ── Check emails prioritaires (Morning Briefing) ─────────────────────────
     if ("check" in t and "email" in t) or ("emails" in t and "priorit" in t):
         result = await call_webhook("morning-briefing", {"user_id": user_id})
         if not result:
-            return (
+            msg = (
                 "⚠️ Impossible d'accéder à Gmail pour l'instant.\n"
                 "→ Active le workflow Morning Briefing dans n8n.obyz.biz."
             )
-        return f"📧 Tes emails prioritaires :\n\n{result.get('briefing', 'Aucune donnée.')}"
+            return msg, "Impossible d'accéder à Gmail. Active le workflow Morning Briefing."
+        chat = f"📧 Tes emails prioritaires :\n\n{result.get('briefing', 'Aucune donnée.')}"
+        return chat, "Voici tes emails prioritaires. J'ai affiché le détail dans le chat."
 
     # ── Smart Agent — analyse de notes ────────────────────────────────────────
     if any(k in t for k in ["analyze my notes", "analyse mes notes", "my notes"]):
         notes = text.split(":", 1)[-1].strip() if ":" in text else ""
         if not notes:
-            return (
+            msg = (
                 "📝 Envoie-moi tes notes à analyser.\n"
                 "Exemple : \"Analyze my notes: réunion lundi, budget Q3, relancer client X\""
             )
+            return msg, "Envoie-moi tes notes à analyser. Par exemple : Analyze my notes, suivi de tes notes."
         result = await call_webhook("smart-agent", {"user_id": user_id, "notes": notes})
         if not result:
-            return (
+            msg = (
                 "⚠️ Le workflow Smart Agent est injoignable.\n"
                 "→ Active le workflow dans n8n.obyz.biz et configure le credential OpenAI."
             )
+            return msg, "Le workflow Smart Agent est injoignable. Active-le sur n8n."
         if not result.get("action_plan"):
-            return "⚠️ L'analyse n'a pas retourné de plan d'action. Réessaie avec des notes plus détaillées."
+            msg = "⚠️ L'analyse n'a pas retourné de plan d'action. Réessaie avec des notes plus détaillées."
+            return msg, "L'analyse n'a pas retourné de plan. Réessaie avec des notes plus détaillées."
         plan = "\n".join(f"• {step}" for step in result["action_plan"])
         email_status = "📩 Email draft créé et envoyé." if result.get("email_sent") else ""
-        return f"📋 Plan d'action :\n\n{plan}\n\n{email_status}".strip()
+        chat = f"📋 Plan d'action :\n\n{plan}\n\n{email_status}".strip()
+        steps_count = len(result["action_plan"])
+        vocal = f"J'ai créé un plan d'action en {steps_count} étapes à partir de tes notes."
+        if result.get("email_sent"):
+            vocal += " Un email draft a été créé."
+        return chat, vocal
 
     return None
 
@@ -233,14 +319,24 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 full_response = ""
 
                 # Détection des commandes quick actions → n8n
-                n8n_response = await _handle_n8n_command(content, user_id)
-                if n8n_response:
+                n8n_result = await _handle_n8n_command(content, user_id)
+                if n8n_result:
+                    chat_text, vocal_text = n8n_result
                     ctx.add_message("user", content)
-                    ctx.add_message("assistant", n8n_response)
+                    ctx.add_message("assistant", chat_text)
                     await websocket.send_text(json.dumps({
                         "type": "response",
-                        "content": n8n_response,
+                        "content": chat_text,
                     }))
+                    # Synthèse vocale du résumé court (non bloquant pour l'affichage)
+                    try:
+                        tts_audio = await text_to_speech(vocal_text)
+                        await websocket.send_text(json.dumps({
+                            "type": "tts",
+                            "audio": encode_audio_base64(tts_audio),
+                        }))
+                    except Exception as tts_err:
+                        logger.warning(f"TTS n8n response failed: {tts_err}")
                     continue
 
                 # Streaming GPT-4o standard
@@ -262,8 +358,33 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 if not audio_b64:
                     continue
                 audio_bytes = decode_audio_base64(audio_b64)
-                transcript, audio_response = await process_voice_message(audio_bytes)
 
+                # STT d'abord pour pouvoir détecter les commandes n8n
+                transcript = await transcribe_audio(audio_bytes)
+
+                # Commande n8n ? → vocal summary + texte complet
+                n8n_result = await _handle_n8n_command(transcript, user_id)
+                if n8n_result:
+                    chat_text, vocal_text = n8n_result
+                    audio_response = await text_to_speech(vocal_text)
+                    # voice_response : montre la transcription + joue l'audio vocal
+                    await websocket.send_text(json.dumps({
+                        "type": "voice_response",
+                        "transcript": transcript,
+                        "audio": encode_audio_base64(audio_response),
+                    }))
+                    # response : affiche le texte complet dans le chat sans changer l'orb
+                    await websocket.send_text(json.dumps({
+                        "type": "response",
+                        "content": chat_text,
+                        "voice_origin": True,
+                    }))
+                    continue
+
+                # Pas de commande n8n → pipeline IA standard
+                ctx = _contexts[user_id]
+                reply_text = await chat_completion(transcript, ctx)
+                audio_response = await text_to_speech(reply_text)
                 await websocket.send_text(json.dumps({
                     "type": "voice_response",
                     "transcript": transcript,

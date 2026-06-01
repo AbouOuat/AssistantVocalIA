@@ -68,7 +68,18 @@ export default function Home() {
             { id: Date.now().toString(), role: "assistant", content: msg.content!, timestamp: new Date() },
           ];
         });
-        setOrbState("idle");
+        // voice_origin=true : la réponse vient d'une commande vocale,
+        // l'audio est déjà géré par voice_response ou tts — ne pas toucher l'orb
+        if (!msg.voice_origin) setOrbState("idle");
+        return;
+      }
+
+      // Audio TTS synthétisé après une commande n8n (texte ou voix)
+      if (msg.type === "tts" && msg.audio) {
+        const audio = new Audio(`data:audio/mp3;base64,${msg.audio}`);
+        setOrbState("speaking");
+        audio.play().catch(() => { /* autoplay bloqué → silencieux */ });
+        audio.onended = () => setOrbState("idle");
         return;
       }
 

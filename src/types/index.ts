@@ -1,11 +1,21 @@
 export type OrbState = "idle" | "listening" | "speaking";
 
+export interface CRData {
+  titre: string;
+  date: string;
+  participants: string[];
+  points_discutes: string[];
+  decisions: string[];
+  actions: string[];
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  crData?: CRData;
 }
 
 export interface WSMessage {

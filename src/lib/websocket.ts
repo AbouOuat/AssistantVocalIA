@@ -38,6 +38,7 @@ export interface WsResponse {
   summary?: string;
   voice_origin?: boolean;
   message?: string;
+  cr_data?: import("@/types").CRData;
 }
 
 type MessageHandler = (msg: WsResponse) => void;

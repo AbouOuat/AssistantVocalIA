@@ -504,7 +504,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                         }
                         chat_text = data["markdown"] + "\n\n---\n💬 **Je t'envoie ça par Outlook ?** (oui / non)"
                         vocal_text = f"Voici ton compte-rendu : {data.get('titre', 'compte-rendu de réunion')}. Je te l'envoie par Outlook ?"
-                        await _send_ws(websocket, {"type": "response", "content": chat_text, "voice_origin": True})
+                        cr_payload = {k: v for k, v in data.items() if k != "markdown"}
+                        await _send_ws(websocket, {
+                            "type": "response",
+                            "content": chat_text,
+                            "voice_origin": True,
+                            "cr_data": cr_payload,
+                        })
                         audio_response = await text_to_speech(vocal_text)
                         await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(audio_response)})
                     except Exception as e:

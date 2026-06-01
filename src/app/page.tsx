@@ -78,12 +78,20 @@ export default function Home() {
         setMessages((prev) => {
           if (sid) {
             return prev.map((m) =>
-              m.id === sid ? { ...m, content: msg.content!, isStreaming: false } : m
+              m.id === sid
+                ? { ...m, content: msg.content!, isStreaming: false, crData: msg.cr_data }
+                : m
             );
           }
           return [
             ...prev,
-            { id: Date.now().toString(), role: "assistant", content: msg.content!, timestamp: new Date() },
+            {
+              id: Date.now().toString(),
+              role: "assistant",
+              content: msg.content!,
+              timestamp: new Date(),
+              crData: msg.cr_data,
+            },
           ];
         });
         // voice_origin=true : la réponse vient d'une commande vocale,

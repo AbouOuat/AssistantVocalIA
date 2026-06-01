@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "memory",
+        "path": "memory-scopes",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -44,12 +44,8 @@
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
       "position": [700, 180],
-      "credentials": {
-        "redis": {
-          "id": "redis-creds",
-          "name": "Redis Jarvis"
-        }
-      }
+      "continueOnFail": true,
+      "credentials": { "redis": { "id": "redis-creds", "name": "Redis Jarvis" } }
     },
     {
       "parameters": {
@@ -61,17 +57,13 @@
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
       "position": [700, 420],
-      "credentials": {
-        "redis": {
-          "id": "redis-creds",
-          "name": "Redis Jarvis"
-        }
-      }
+      "continueOnFail": true,
+      "credentials": { "redis": { "id": "redis-creds", "name": "Redis Jarvis" } }
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, operation: 'set', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key }) }}"
+        "responseBody": "={{ JSON.stringify({ ok: !$json.error, operation: 'set', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key, error: $json.error || null }) }}"
       },
       "id": "respond-set",
       "name": "Répondre SET",
@@ -82,7 +74,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, operation: 'get', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key, value: $json.value ? JSON.parse($json.value) : null }) }}"
+        "responseBody": "={{ JSON.stringify({ ok: !$json.error, operation: 'get', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key, value: $json.value ? JSON.parse($json.value) : null, error: $json.error || null }) }}"
       },
       "id": "respond-get",
       "name": "Répondre GET",

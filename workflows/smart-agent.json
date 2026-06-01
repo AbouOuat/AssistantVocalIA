@@ -24,40 +24,36 @@
           "values": [
             {
               "role": "system",
-              "content": "Tu es Jarvis, un assistant IA expert en productivité. Analyse les notes de l'utilisateur et génère : 1) Un plan d'action structuré avec 3-5 étapes concrètes et prioritisées, 2) Un brouillon d'email professionnel si une action nécessite une communication. Réponds en JSON avec les clés : action_plan (array de strings), email_draft (objet avec subject et body si pertinent, sinon null), summary (string résumant en 1 phrase)."
+              "content": "Tu es Jarvis, expert en productivité. Analyse les notes et génère : 1) Plan d'action 3-5 étapes prioritisées, 2) Email professionnel si nécessaire. Réponds UNIQUEMENT en JSON valide avec : action_plan (array de strings), email_draft (objet {subject, body} ou null), summary (string)."
             },
             {
               "role": "user",
-              "content": "=Analyse ces notes et génère un plan d'action :\n\n{{ $json.body.notes }}"
+              "content": "=Analyse ces notes :\\n\\n{{ $json.body.notes }}"
             }
           ]
         },
-        "options": {
-          "temperature": 0.3,
-          "responseFormat": "json_object"
-        }
+        "options": { "temperature": 0.3, "responseFormat": "json_object" }
       },
       "id": "openai-analyze",
       "name": "Analyser avec GPT-4o",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1,
       "position": [480, 300],
+      "continueOnFail": true,
       "credentials": {
-        "openAiApi": {
-          "id": "openai-creds",
-          "name": "OpenAI Jarvis"
-        }
+        "openAiApi": { "id": "openai-creds", "name": "OpenAI Jarvis" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const response = $json.message.content;\nlet parsed;\ntry {\n  parsed = JSON.parse(response);\n} catch (e) {\n  parsed = { action_plan: [response], email_draft: null, summary: 'Analyse complète.' };\n}\n\nreturn [{ json: parsed }];"
+        "jsCode": "let parsed;\ntry {\n  const content = $json.message?.content || $json.error || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — réessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse échouée.' };\n}\nreturn [{ json: parsed }];"
       },
       "id": "parse-node",
       "name": "Parser la réponse",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [720, 300]
+      "position": [720, 300],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -87,18 +83,16 @@
       "name": "Envoyer email draft",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [1200, 200],
+      "position": [1200, 180],
+      "continueOnFail": true,
       "credentials": {
-        "gmailOAuth2": {
-          "id": "gmail-creds",
-          "name": "Gmail Jarvis"
-        }
+        "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" }
       }
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ action_plan: $('Parser la réponse').first().json.action_plan, summary: $('Parser la réponse').first().json.summary, email_sent: $('Email à envoyer ?').first().json.email_draft !== null }) }}"
+        "responseBody": "={{ JSON.stringify({ action_plan: $('Parser la réponse').first().json.action_plan, summary: $('Parser la réponse').first().json.summary, email_sent: !!$('Parser la réponse').first().json.email_draft }) }}"
       },
       "id": "respond-node",
       "name": "Répondre",

@@ -11,18 +11,18 @@
       "name": "Toutes les 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [240, 300]
+      "position": [-656, 80]
     },
     {
       "parameters": {
-        "url": "={{ $env.BACKEND_URL || 'http://backend:8000' }}/api/reminders/pending",
+        "url": "http://backend:8000/api/reminders/pending",
         "options": {}
       },
       "id": "fetch-due",
       "name": "Rappels dus",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [460, 300],
+      "position": [-448, 80],
       "continueOnFail": true
     },
     {
@@ -41,21 +41,21 @@
       "name": "Y a-t-il des rappels ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [680, 300]
+      "position": [-224, 80]
     },
     {
       "parameters": {
-        "jsCode": "const due = $input.first().json.due;\nconst lines = due.map(t => `• ${t.text}${t.due_at ? ' (échéance : ' + new Date(t.due_at).toLocaleString('fr-FR') + ')' : ''}`);\nconst body = `Bonjour !\\n\\nVoici tes rappels dus :\\n\\n${lines.join('\\n')}\\n\\nJarvis`;\nreturn [{ json: { body, subject: `[Jarvis] ${due.length} rappel(s) en attente`, task_ids: due.map(t => t.id) } }];"
+        "jsCode": "const mailDest = 'ouat.abou34@gmail.com';\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (echeance : ' + new Date(t.due_at).toLocaleString('fr-FR') + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour !\\n\\nVoici tes rappels dus :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
       },
       "id": "format-email",
       "name": "Formater l'email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 220]
+      "position": [0, 0]
     },
     {
       "parameters": {
-        "sendTo": "={{ $env.GMAIL_USER_EMAIL }}",
+        "sendTo": "={{ $json.mailDest }}",
         "subject": "={{ $json.subject }}",
         "message": "={{ $json.body }}",
         "options": {}
@@ -64,21 +64,21 @@
       "name": "Envoyer email",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [1120, 220],
+      "position": [224, 0],
       "continueOnFail": true,
       "credentials": {
-        "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" }
+        "gmailOAuth2": { "id": "ZO3kLaKLb2hdHVw5", "name": "Gmail account" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const task_ids = $('Formater l\\'email').first().json.task_ids;\nconst baseUrl = $env.BACKEND_URL || 'http://backend:8000';\nconst results = [];\nfor (const id of task_ids) {\n  results.push({ json: { id, url: `${baseUrl}/api/reminders/${id}/notified` } });\n}\nreturn results;"
+        "jsCode": "const task_ids = $('Formater l\\'email').first().json.task_ids;\nconst results = [];\nfor (const id of task_ids) {\n  results.push({ json: { id, url: 'http://backend:8000/api/reminders/' + id + '/notified' } });\n}\nreturn results;"
       },
       "id": "prepare-mark",
-      "name": "Préparer mark notified",
+      "name": "Preparer mark notified",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 220]
+      "position": [448, 0]
     },
     {
       "parameters": {
@@ -87,25 +87,35 @@
         "options": {}
       },
       "id": "mark-notified",
-      "name": "Marquer notifiés",
+      "name": "Marquer notifies",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1560, 220],
+      "position": [672, 0],
       "continueOnFail": true
     }
   ],
   "connections": {
-    "Toutes les 5 minutes": { "main": [[{ "node": "Rappels dus", "type": "main", "index": 0 }]] },
-    "Rappels dus": { "main": [[{ "node": "Y a-t-il des rappels ?", "type": "main", "index": 0 }]] },
+    "Toutes les 5 minutes": {
+      "main": [[{ "node": "Rappels dus", "type": "main", "index": 0 }]]
+    },
+    "Rappels dus": {
+      "main": [[{ "node": "Y a-t-il des rappels ?", "type": "main", "index": 0 }]]
+    },
     "Y a-t-il des rappels ?": {
       "main": [
         [{ "node": "Formater l'email", "type": "main", "index": 0 }],
         []
       ]
     },
-    "Formater l'email": { "main": [[{ "node": "Envoyer email", "type": "main", "index": 0 }]] },
-    "Envoyer email": { "main": [[{ "node": "Préparer mark notified", "type": "main", "index": 0 }]] },
-    "Préparer mark notified": { "main": [[{ "node": "Marquer notifiés", "type": "main", "index": 0 }]] }
+    "Formater l'email": {
+      "main": [[{ "node": "Envoyer email", "type": "main", "index": 0 }]]
+    },
+    "Envoyer email": {
+      "main": [[{ "node": "Preparer mark notified", "type": "main", "index": 0 }]]
+    },
+    "Preparer mark notified": {
+      "main": [[{ "node": "Marquer notifies", "type": "main", "index": 0 }]]
+    }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },

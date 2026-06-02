@@ -61,8 +61,8 @@
         "returnAll": false,
         "limit": 10,
         "options": {
-          "timeMin": "={{ new Date(new Date().setHours(0,0,0,0)).toISOString() }}",
-          "timeMax": "={{ new Date(new Date().setHours(23,59,59,999)).toISOString() }}",
+          "timeMin": "={{ $now.startOf('day').toISO() }}",
+          "timeMax": "={{ $now.endOf('day').toISO() }}",
           "singleEvents": true,
           "orderBy": "startTime"
         }

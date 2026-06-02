@@ -29,7 +29,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ ($env.BACKEND_URL || 'http://backend:8000') + '/api/chat' }}",
+        "url": "http://backend:8000/api/chat",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [

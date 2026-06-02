@@ -323,9 +323,8 @@ export default function Home() {
             <motion.p
               key="progress"
               initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: [0.6, 1, 0.6] }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              animate={{ opacity: [0.6, 1, 0.6], transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" } }}
+              exit={{ opacity: 0, y: -4, transition: { duration: 0.3 } }}
               className="text-[13px] font-mono text-voice-active text-center px-4"
             >
               {progressMessage}

@@ -27,7 +27,6 @@ async def realtime_session(client_ws) -> None:
     """
     additional_headers = {
         "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-        "OpenAI-Beta": "realtime=v1",
     }
 
     try:

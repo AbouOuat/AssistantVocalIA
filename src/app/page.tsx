@@ -209,7 +209,7 @@ export default function Home() {
 
             case "disconnected":
               setRealtimeMode(false);
-              setConnected(false);
+              // Ne pas toucher setConnected — le WebSocket principal gère son propre état
               break;
           }
         });

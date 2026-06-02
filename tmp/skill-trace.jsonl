@@ -1,0 +1,4 @@
+{"skill": "brainstorm", "artifact": "docs/brainstorms/2026-05-28-jarvis-v2-hackathon.md", "next": "user-choice", "ts": "2026-05-28T16:49:00Z"}
+{"skill": "architect", "artifact": "PRD.md", "next": "/design → /plan Phase 1", "ts": "2026-05-28T17:00:00Z"}
+{"skill": "design", "artifact": "DESIGN.md", "next": "/plan Phase 1", "ts": "2026-05-28T17:15:00Z"}
+{"skill": "plan", "artifact": "docs/plans/phase-1-plan.md", "next": "/execute docs/plans/phase-1-plan.md", "ts": "2026-05-28T17:20:00Z"}

@@ -20,9 +20,20 @@ llm = ChatOpenAI(
 
 @tool
 def web_search(query: str) -> str:
-    """Search the web for information."""
-    # TODO Phase 2 : intégrer SerpAPI ou Tavily
-    return f"Recherche web pour: {query} (intégration à implémenter en Phase 2)"
+    """Search the web for current information about any topic."""
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+        if not results:
+            return f"Aucun résultat trouvé pour : {query}"
+        parts = []
+        for r in results:
+            parts.append(f"{r['title']}\n{r['body']}\nSource : {r['href']}")
+        return "\n\n".join(parts)
+    except Exception as e:
+        logger.warning(f"web_search error: {e}")
+        return f"Recherche indisponible pour : {query}"
 
 
 @tool

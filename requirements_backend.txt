@@ -29,3 +29,6 @@ websockets>=12.0
 # Authentication
 pyjwt==2.8.0
 bcrypt==4.1.1
+
+# Web search
+duckduckgo-search==6.2.6

@@ -40,5 +40,6 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: "compte-rendu", label: "Compte-rendu", command: "Jarvis, rédige un compte-rendu de réunion", emoji: "📋" },
   { id: "outlook-classify", label: "Outlook avocat", command: "Analyse mes emails Outlook", emoji: "📬" },
   { id: "classify", label: "Classify Gmail", command: "Classify my last 10 emails", emoji: "📨" },
+  { id: "tasks", label: "My tasks", command: "Show my tasks", emoji: "✅" },
   { id: "memory", label: "What do you know?", command: "What do you know about me?", emoji: "🧠" },
 ];

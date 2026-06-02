@@ -31,7 +31,7 @@ function generatePDF(cr: CRData) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(249, 250, 251);
-    doc.text("JARVIS — COMPTE-RENDU DE RÉUNION", margin, 12);
+    doc.text("JARVIS - COMPTE-RENDU DE REUNION", margin, 12);
     doc.setTextColor(0, 212, 255);
     doc.text(new Date().toLocaleDateString("fr-FR"), pageW - margin, 12, { align: "right" });
 
@@ -95,9 +95,9 @@ function generatePDF(cr: CRData) {
       y += 6;
     };
 
-    addSection("📋", "Points discutés", cr.points_discutes);
-    addSection("✅", "Décisions prises", cr.decisions);
-    addSection("🎯", "Actions à suivre", cr.actions);
+    addSection(">>", "Points discutés", cr.points_discutes);
+    addSection(">>", "Décisions prises", cr.decisions);
+    addSection(">>", "Actions à suivre", cr.actions);
 
     // ── Pied de page ────────────────────────────────────────────────────────
     const totalPages = doc.getNumberOfPages();

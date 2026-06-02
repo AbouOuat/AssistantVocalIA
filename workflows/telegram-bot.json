@@ -1,0 +1,83 @@
+{
+  "name": "[DEV] Telegram Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger",
+      "name": "Message Telegram",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "telegramApi": { "id": "telegram-creds", "name": "Jarvis Telegram Bot" }
+      },
+      "webhookId": "telegram-jarvis"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\nconst text = msg.message?.text || '';\nconst chat_id = msg.message?.chat?.id;\nconst from = msg.message?.from?.first_name || 'Inconnu';\nif (!text || !chat_id) return [];\nreturn [{ json: { text, chat_id, from } }];"
+      },
+      "id": "extract-msg",
+      "name": "Extraire message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.BACKEND_URL || 'http://backend:8000') + '/api/chat' }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "text", "value": "={{ $json.text }}" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "call-jarvis",
+      "name": "Appeler Jarvis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const jarvisResp = $('Appeler Jarvis').first().json;\nconst chatId = $('Extraire message').first().json.chat_id;\nconst response = jarvisResp.response || jarvisResp.detail || 'Erreur — Jarvis est injoignable.';\nconst MAX = 4096;\nconst chunks = [];\nfor (let i = 0; i < response.length; i += MAX) {\n  chunks.push({ json: { chat_id: chatId, text: response.slice(i, i + MAX) } });\n}\nreturn chunks.length ? chunks : [{ json: { chat_id: chatId, text: 'Erreur — réponse vide.' } }];"
+      },
+      "id": "prepare-reply",
+      "name": "Préparer réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "send-reply",
+      "name": "Répondre sur Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "credentials": {
+        "telegramApi": { "id": "telegram-creds", "name": "Jarvis Telegram Bot" }
+      }
+    }
+  ],
+  "connections": {
+    "Message Telegram": { "main": [[{ "node": "Extraire message", "type": "main", "index": 0 }]] },
+    "Extraire message": { "main": [[{ "node": "Appeler Jarvis", "type": "main", "index": 0 }]] },
+    "Appeler Jarvis": { "main": [[{ "node": "Préparer réponse", "type": "main", "index": 0 }]] },
+    "Préparer réponse": { "main": [[{ "node": "Répondre sur Telegram", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "telegram", "mobile"]
+}

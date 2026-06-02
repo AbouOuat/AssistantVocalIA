@@ -5,9 +5,13 @@ import json
 import logging
 import os
 import re
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
@@ -400,6 +404,90 @@ async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None
         vocal = f"J'ai mémorisé des informations dans {sum(1 for v in all_memory.values() if v)} catégorie(s). J'ai affiché le détail dans le chat."
         return chat, vocal
 
+    # ── Rappels / Tâches ─────────────────────────────────────────────────────
+    REMIND_KEYWORDS = [
+        "remind me", "rappelle-moi", "rappelle moi", "reminder", "add task",
+        "ajoute une tâche", "ajoute une tache", "add reminder", "new task",
+        "nouvelle tâche", "nouvelle tache",
+    ]
+    TASKS_LIST_KEYWORDS = [
+        "my tasks", "mes tâches", "mes taches", "show tasks", "show reminders",
+        "mes rappels", "liste mes tâches", "liste des tâches", "what are my tasks",
+        "affiche mes tâches",
+    ]
+
+    if any(k in t for k in TASKS_LIST_KEYWORDS):
+        tasks = await memory_service.get_all(user_id, "tasks")
+        pending = {k: v for k, v in tasks.items() if not v.get("done", False)}
+        if not pending:
+            return "📋 Aucune tâche en cours.", "Tu n'as aucune tâche en cours."
+        lines = ["📋 **Tes tâches en cours :**\n"]
+        for tid, task in sorted(pending.items()):
+            due = task.get("due_at")
+            due_str = ""
+            if due:
+                try:
+                    due_str = f" — échéance {datetime.fromisoformat(due).strftime('%d/%m à %H:%M')}"
+                except ValueError:
+                    pass
+            lines.append(f"• {task['text']}{due_str}")
+        chat = "\n".join(lines)
+        vocal = f"Tu as {len(pending)} tâche(s) en cours. J'ai affiché la liste dans le chat."
+        return chat, vocal
+
+    if any(k in t for k in REMIND_KEYWORDS):
+        # Extraire le texte de la tâche — tout ce qui suit "to", "de", ":"
+        task_text = text.strip()
+        for prefix in ["remind me to", "rappelle-moi de", "rappelle moi de", "add task:", "add task :",
+                        "ajoute une tâche:", "ajoute une tache:", "add reminder:", "reminder:"]:
+            if prefix in t:
+                idx = t.index(prefix) + len(prefix)
+                task_text = text[idx:].strip()
+                break
+
+        # Détecter heure (ex: "at 15h30", "at 3pm", "dans 30 minutes")
+        due_at = None
+        now_dt = datetime.now()
+        at_match = re.search(r'\bat\s+(\d{1,2})(?:h|:)(\d{2})?(?:h)?\b', task_text.lower())
+        in_match = re.search(r'\bin\s+(\d+)\s+(minute|minutes|min|hour|hours|heure|heures|h)\b', task_text.lower())
+        if at_match:
+            hour = int(at_match.group(1))
+            minute = int(at_match.group(2)) if at_match.group(2) else 0
+            due_at = now_dt.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if due_at < now_dt:
+                due_at = due_at + timedelta(days=1)
+            task_text = re.sub(r'\bat\s+\d{1,2}(?:h|:)\d{0,2}(?:h)?\b', '', task_text, flags=re.IGNORECASE).strip()
+        elif in_match:
+            amount = int(in_match.group(1))
+            unit = in_match.group(2).lower()
+            if "min" in unit:
+                due_at = now_dt + timedelta(minutes=amount)
+            else:
+                due_at = now_dt + timedelta(hours=amount)
+            task_text = re.sub(r'\bin\s+\d+\s+\w+\b', '', task_text, flags=re.IGNORECASE).strip()
+
+        if not task_text:
+            return "❓ Dis-moi ce que tu veux que je te rappelle.", "Dis-moi ce que tu veux que je te rappelle."
+
+        task_id = _task_key()
+        task = {
+            "text": task_text,
+            "due_at": due_at.isoformat() if due_at else None,
+            "created_at": now_dt.isoformat(),
+            "done": False,
+            "notified": False,
+        }
+        await memory_service.set(user_id, "tasks", task_id, task)
+
+        if due_at:
+            due_str = due_at.strftime("%d/%m à %H:%M")
+            chat = f"✅ Rappel ajouté : **{task_text}** — échéance le {due_str}."
+            vocal = f"Rappel ajouté : {task_text}, pour le {due_str}."
+        else:
+            chat = f"✅ Tâche ajoutée : **{task_text}**."
+            vocal = f"Tâche ajoutée : {task_text}."
+        return chat, vocal
+
     return None
 
 
@@ -411,6 +499,33 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+class ChatRequest(BaseModel):
+    text: str
+    user_id: Optional[int] = None
+
+
+@app.post("/api/chat")
+async def http_chat(body: ChatRequest):
+    """HTTP chat endpoint — used by n8n Telegram bot and external clients."""
+    uid = body.user_id or _demo_user_id
+    if not uid:
+        raise HTTPException(status_code=503, detail="Demo user not ready")
+
+    n8n_result = await _handle_n8n_command(body.text, uid)
+    if n8n_result:
+        chat_text, _ = n8n_result
+        return {"response": chat_text}
+
+    ctx = _contexts.get(uid) or ConversationContext()
+    _contexts[uid] = ctx
+    try:
+        reply = await chat_completion(body.text, ctx)
+    except Exception as e:
+        logger.error(f"HTTP chat error: {e}")
+        raise HTTPException(status_code=500, detail="AI error")
+    return {"response": reply}
 
 
 @app.get("/devices")
@@ -425,6 +540,93 @@ async def get_devices():
 async def get_config():
     """Return demo token and runtime capabilities for hackathon frontend."""
     return {"token": _demo_token, "user_id": _demo_user_id, "realtime_mode": _realtime_ok}
+
+
+# ── Reminders / Tasks API ─────────────────────────────────────────────────────
+
+class ReminderCreate(BaseModel):
+    text: str
+    due_at: Optional[str] = None  # ISO datetime string, None = no specific time
+
+
+def _task_key() -> str:
+    return f"task_{int(time.time() * 1000)}"
+
+
+@app.get("/api/reminders")
+async def list_reminders():
+    uid = _demo_user_id
+    if not uid:
+        raise HTTPException(status_code=503, detail="Demo user not ready")
+    tasks = await memory_service.get_all(uid, "tasks")
+    pending = {k: v for k, v in tasks.items() if not v.get("done", False)}
+    return {"reminders": pending, "count": len(pending)}
+
+
+@app.post("/api/reminders")
+async def create_reminder(body: ReminderCreate):
+    uid = _demo_user_id
+    if not uid:
+        raise HTTPException(status_code=503, detail="Demo user not ready")
+    task_id = _task_key()
+    task = {
+        "text": body.text,
+        "due_at": body.due_at,
+        "created_at": datetime.now().isoformat(),
+        "done": False,
+        "notified": False,
+    }
+    await memory_service.set(uid, "tasks", task_id, task)
+    return {"id": task_id, "task": task}
+
+
+@app.get("/api/reminders/pending")
+async def get_pending_reminders():
+    """Used by n8n to fetch due reminders (due_at <= now, not yet notified)."""
+    uid = _demo_user_id
+    if not uid:
+        return {"due": [], "count": 0}
+    tasks = await memory_service.get_all(uid, "tasks")
+    now = datetime.now()
+    due = []
+    for task_id, task in tasks.items():
+        if task.get("done") or task.get("notified"):
+            continue
+        due_at = task.get("due_at")
+        if not due_at:
+            continue
+        try:
+            if datetime.fromisoformat(due_at) <= now:
+                due.append({"id": task_id, **task})
+        except ValueError:
+            pass
+    return {"due": due, "count": len(due)}
+
+
+@app.patch("/api/reminders/{task_id}/notified")
+async def mark_notified(task_id: str):
+    uid = _demo_user_id
+    if not uid:
+        raise HTTPException(status_code=503, detail="Demo user not ready")
+    task = await memory_service.get(uid, "tasks", task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task["notified"] = True
+    await memory_service.set(uid, "tasks", task_id, task)
+    return {"ok": True}
+
+
+@app.patch("/api/reminders/{task_id}/done")
+async def mark_done(task_id: str):
+    uid = _demo_user_id
+    if not uid:
+        raise HTTPException(status_code=503, detail="Demo user not ready")
+    task = await memory_service.get(uid, "tasks", task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task["done"] = True
+    await memory_service.set(uid, "tasks", task_id, task)
+    return {"ok": True}
 
 
 @app.websocket("/ws")
@@ -597,7 +799,23 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     continue
 
                 # ── Commande n8n ? ──────────────────────────────────────────
-                n8n_result = await _handle_n8n_command(transcript, user_id)
+                voice_steps = _get_progress_steps(transcript)
+                voice_ticker: asyncio.Task | None = None
+                if voice_steps:
+                    await _send_ws(websocket, {"type": "progress", "message": voice_steps[0]})
+                    if len(voice_steps) > 1:
+                        async def _voice_ticker(remaining=voice_steps[1:]):
+                            for step in remaining:
+                                await asyncio.sleep(10)
+                                await _send_ws(websocket, {"type": "progress", "message": step})
+                        voice_ticker = asyncio.create_task(_voice_ticker())
+
+                try:
+                    n8n_result = await _handle_n8n_command(transcript, user_id)
+                finally:
+                    if voice_ticker:
+                        voice_ticker.cancel()
+
                 if n8n_result:
                     chat_text, vocal_text = n8n_result
                     try:

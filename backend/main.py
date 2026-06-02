@@ -366,6 +366,40 @@ async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None
         )
         return chat, vocal
 
+    # ── Mémoire — "What do you know about me?" ──────────────────────────────
+    MEMORY_KEYWORDS = [
+        "what do you know", "what do you remember", "what you know",
+        "que sais-tu", "tu sais quoi", "ta mémoire", "ce que tu sais",
+        "what have you stored", "show memory", "ma mémoire",
+    ]
+    if any(k in t for k in MEMORY_KEYWORDS):
+        all_memory = await memory_service.get_all_scopes(user_id)
+        has_data = any(v for v in all_memory.values())
+
+        if not has_data:
+            chat = (
+                "🧠 **Mémoire vide pour l'instant.**\n\n"
+                "Je n'ai encore rien mémorisé sur toi. "
+                "Tu peux me dire des choses à retenir, par exemple :\n"
+                "• *\"Remember that my standup is every Monday at 9am\"*\n"
+                "• *\"Remember I prefer concise answers\"*"
+            )
+            return chat, "Je n'ai encore rien mémorisé sur toi. Dis-moi ce que tu veux que je retienne."
+
+        lines = ["🧠 **Voici ce que je sais sur toi :**\n"]
+        icons = {"projects": "📁", "preferences": "⚙️", "tasks": "✅", "context": "💡"}
+        for scope, entries in all_memory.items():
+            if not entries:
+                continue
+            lines.append(f"\n**{icons.get(scope, '•')} {scope.capitalize()}**")
+            for key, value in entries.items():
+                display = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+                lines.append(f"• {key} : {display}")
+
+        chat = "\n".join(lines)
+        vocal = f"J'ai mémorisé des informations dans {sum(1 for v in all_memory.values() if v)} catégorie(s). J'ai affiché le détail dans le chat."
+        return chat, vocal
+
     return None
 
 

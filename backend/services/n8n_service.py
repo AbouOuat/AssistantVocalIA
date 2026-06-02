@@ -78,6 +78,9 @@ async def call_webhook(
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(url, json=payload)
                 if resp.status_code == 200:
+                    if not resp.text.strip():
+                        logger.warning(f"[n8n] {webhook_path} → réponse vide (workflow en erreur interne ?)")
+                        return None
                     return resp.json()
                 logger.warning(f"[n8n] {webhook_path} → HTTP {resp.status_code} (tentative {attempt + 1})")
         except Exception as e:

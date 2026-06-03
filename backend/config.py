@@ -9,6 +9,7 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = "gpt-4o"
     OPENAI_REALTIME_MODEL: str = "gpt-4o-realtime-preview"
+    REALTIME_ENABLED: bool = os.getenv("REALTIME_ENABLED", "false").lower() == "true"
 
     # Database
     DATABASE_URL: str = os.getenv(

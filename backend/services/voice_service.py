@@ -22,8 +22,16 @@ _realtime_available: bool | None = None
 
 
 async def check_realtime_access() -> bool:
-    """Tester si le compte a accès à l'OpenAI Realtime API."""
+    """Tester si le compte a accès à l'OpenAI Realtime API.
+
+    Requiert REALTIME_ENABLED=true en variable d'environnement.
+    Par défaut désactivé : Whisper + function calling sont la voie fiable.
+    """
     global _realtime_available
+    if not settings.REALTIME_ENABLED:
+        logger.info("[WHISPER_MODE] Realtime désactivé (REALTIME_ENABLED != true) — Whisper + function calling actifs")
+        _realtime_available = False
+        return False
     if _realtime_available is not None:
         return _realtime_available
     try:

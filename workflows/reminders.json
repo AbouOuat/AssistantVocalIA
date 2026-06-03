@@ -15,6 +15,59 @@
     },
     {
       "parameters": {
+        "httpMethod": "POST",
+        "path": "reminders",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Nouveau rappel",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-656, 300],
+      "webhookId": "reminders"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst text = String(body.text || '').trim();\nconst due_at = String(body.due_at || '').trim();\nif (!text) return [{ json: { ok: false, error: 'Texte manquant' } }];\nlet due_str = '';\nif (due_at) {\n  try { due_str = new Date(due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }); } catch(e) { due_str = due_at; }\n}\nconst subject = '[Jarvis] Rappel créé : ' + text.slice(0, 60);\nconst emailBody = 'Bonjour Abo !\\n\\n✅ Ton rappel a bien été créé :\\n\\n' + '📌 ' + text + (due_str ? '\\n⏰ Échéance : ' + due_str : '') + '\\n\\nJe te notifierai quand ce sera l\\'heure.\\n\\nJarvis';\nreturn [{ json: { ok: true, text, due_str, subject, emailBody } }];"
+      },
+      "id": "format-confirm",
+      "name": "Formater confirmation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-400, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "sendTo": "ouat.abou34@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "send-confirm",
+      "name": "Email confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [-144, 300],
+      "continueOnFail": true,
+      "credentials": {
+        "gmailOAuth2": { "id": "ZO3kLaKLb2hdHVw5", "name": "Gmail account" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, message: 'Rappel enregistré, confirmation email envoyée.', text: $('Formater confirmation').first().json.text, due_str: $('Formater confirmation').first().json.due_str }) }}"
+      },
+      "id": "respond-webhook",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [112, 300]
+    },
+    {
+      "parameters": {
         "url": "http://backend:8000/api/reminders/pending",
         "options": {}
       },
@@ -45,7 +98,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const mailDest = 'ouat.abou34@gmail.com';\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (echeance : ' + new Date(t.due_at).toLocaleString('fr-FR') + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour !\\n\\nVoici tes rappels dus :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
+        "jsCode": "const mailDest = 'ouat.abou34@gmail.com';\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (échéance : ' + new Date(t.due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour Abo !\\n\\n⏰ Rappels à traiter maintenant :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ⏰ ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
       },
       "id": "format-email",
       "name": "Formater l'email",
@@ -95,27 +148,18 @@
     }
   ],
   "connections": {
-    "Toutes les 5 minutes": {
-      "main": [[{ "node": "Rappels dus", "type": "main", "index": 0 }]]
-    },
-    "Rappels dus": {
-      "main": [[{ "node": "Y a-t-il des rappels ?", "type": "main", "index": 0 }]]
-    },
-    "Y a-t-il des rappels ?": {
-      "main": [
-        [{ "node": "Formater l'email", "type": "main", "index": 0 }],
-        []
-      ]
-    },
-    "Formater l'email": {
-      "main": [[{ "node": "Envoyer email", "type": "main", "index": 0 }]]
-    },
-    "Envoyer email": {
-      "main": [[{ "node": "Preparer mark notified", "type": "main", "index": 0 }]]
-    },
-    "Preparer mark notified": {
-      "main": [[{ "node": "Marquer notifies", "type": "main", "index": 0 }]]
-    }
+    "Toutes les 5 minutes":    { "main": [[{ "node": "Rappels dus",            "type": "main", "index": 0 }]] },
+    "Webhook - Nouveau rappel":{ "main": [[{ "node": "Formater confirmation",  "type": "main", "index": 0 }]] },
+    "Formater confirmation":   { "main": [[{ "node": "Email confirmation",     "type": "main", "index": 0 }]] },
+    "Email confirmation":      { "main": [[{ "node": "Répondre Webhook",       "type": "main", "index": 0 }]] },
+    "Rappels dus":             { "main": [[{ "node": "Y a-t-il des rappels ?", "type": "main", "index": 0 }]] },
+    "Y a-t-il des rappels ?":  { "main": [
+      [{ "node": "Formater l'email",  "type": "main", "index": 0 }],
+      []
+    ]},
+    "Formater l'email":        { "main": [[{ "node": "Envoyer email",          "type": "main", "index": 0 }]] },
+    "Envoyer email":           { "main": [[{ "node": "Preparer mark notified", "type": "main", "index": 0 }]] },
+    "Preparer mark notified":  { "main": [[{ "node": "Marquer notifies",       "type": "main", "index": 0 }]] }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },

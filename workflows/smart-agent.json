@@ -17,36 +17,28 @@
     },
     {
       "parameters": {
-        "resource": "chat",
-        "operation": "complete",
-        "model": "gpt-4o",
-        "messages": {
-          "values": [
-            {
-              "role": "system",
-              "content": "Tu es Jarvis, expert en productivité. Analyse les notes et génère : 1) Plan d'action 3-5 étapes prioritisées, 2) Email professionnel si nécessaire. Réponds UNIQUEMENT en JSON valide avec : action_plan (array de strings), email_draft (objet {subject, body} ou null), summary (string)."
-            },
-            {
-              "role": "user",
-              "content": "=Analyse ces notes :\\n\\n{{ $json.body.notes }}"
-            }
-          ]
-        },
-        "options": { "temperature": 0.3, "responseFormat": "json_object" }
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o', temperature: 0.3, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Tu es Jarvis, expert en productivité. Analyse les notes et génère un plan d action. Réponds UNIQUEMENT en JSON valide avec : action_plan (array de strings, 3-5 étapes prioritisées), email_draft (objet {subject, body} ou null si pas nécessaire), summary (string, 1 phrase).' }, { role: 'user', content: 'Analyse ces notes :\\n\\n' + $json.body.notes }] }) }}",
+        "options": {}
       },
       "id": "openai-analyze",
       "name": "Analyser avec GPT-4o",
-      "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [480, 300],
       "continueOnFail": true,
       "credentials": {
-        "openAiApi": { "id": "openai-creds", "name": "OpenAI Jarvis" }
+        "httpHeaderAuth": { "id": "5M4kmujo7Cv8RjjE", "name": "Header Auth account" }
       }
     },
     {
       "parameters": {
-        "jsCode": "let parsed;\ntry {\n  const content = $json.message?.content || $json.error || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — réessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse échouée.' };\n}\nreturn [{ json: parsed }];"
+        "jsCode": "let parsed;\ntry {\n  const content = $json.choices?.[0]?.message?.content || $json.error || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — réessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse échouée.' };\n}\nreturn [{ json: parsed }];"
       },
       "id": "parse-node",
       "name": "Parser la réponse",

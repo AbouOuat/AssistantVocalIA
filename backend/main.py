@@ -166,9 +166,28 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
             emails = await memory_service.get(user_id, "context", "recent_emails_outlook")
             if emails:
                 parts.append(_format_emails_context("Outlook", emails))
-        if not parts:
-            return "Aucun email en mémoire. Demande d'abord une classification (ex: 'analyse mes emails')."
-        return "\n\n".join(parts)
+        if parts:
+            return "\n\n".join(parts)
+
+        # Redis vide — fallback direct vers les workflows de recherche
+        fallback = []
+        if source in ("gmail", "tous"):
+            r = await call_webhook("gmail-search", {"q": "newer_than:7d", "limit": 10})
+            if r and r.get("ok") and r.get("emails"):
+                raw = r["emails"]
+                structured = [{**e, "urgence": "faible", "action": "lire", "resume": e.get("snippet", "")[:100]} for e in raw]
+                await memory_service.set(user_id, "context", "recent_emails_gmail", structured, ttl_seconds=3600)
+                fallback.append(_format_emails_context("Gmail", raw))
+        if source in ("outlook", "tous"):
+            r = await call_webhook("outlook-search", {"q": "", "limit": 10})
+            if r and r.get("ok") and r.get("emails"):
+                raw = r["emails"]
+                structured = [{**e, "urgence": "faible", "action": "lire", "resume": e.get("snippet", "")[:100]} for e in raw]
+                await memory_service.set(user_id, "context", "recent_emails_outlook", structured, ttl_seconds=3600)
+                fallback.append(_format_emails_context("Outlook", raw))
+        if fallback:
+            return "\n\n".join(fallback)
+        return "Aucun email trouvé. Vérifie que les workflows Gmail et Outlook sont actifs dans n8n."
 
     if name == "morning_briefing":
         result = await call_webhook("morning-briefing", {"user_id": user_id})

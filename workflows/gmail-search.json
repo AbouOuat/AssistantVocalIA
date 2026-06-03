@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim() || 'is:unread newer_than:7d';\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nreturn [{ json: { q, limit } }];"
+        "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim() || 'newer_than:7d';\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nreturn [{ json: { q, limit } }];"
       },
       "id": "config-node",
       "name": "Configuration",

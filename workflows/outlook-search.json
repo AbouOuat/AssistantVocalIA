@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim();\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nconst dateFrom = String(body.date_from || '');\nlet filter = '';\nif (dateFrom) filter = `receivedDateTime ge ${dateFrom}T00:00:00Z`;\nreturn [{ json: { q, limit, filter } }];"
+        "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim();\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nconst dateFrom = String(body.date_from || '').trim();\nlet url = `https://graph.microsoft.com/v1.0/me/messages?$top=${limit}&$select=id,subject,from,receivedDateTime,bodyPreview,importance`;\nif (q) {\n  url += `&$search=\"${encodeURIComponent(q)}\"`;\n} else {\n  url += '&$orderby=receivedDateTime desc';\n  if (dateFrom) url += `&$filter=receivedDateTime ge ${dateFrom}T00:00:00Z`;\n}\nreturn [{ json: { url, q, limit } }];"
       },
       "id": "config-node",
       "name": "Configuration",
@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://graph.microsoft.com/v1.0/me/messages?$top=' + $json.limit + '&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,importance' + ($json.q ? '&$search=%22' + encodeURIComponent($json.q) + '%22' : '') + ($json.filter ? '&$filter=' + encodeURIComponent($json.filter) : '') }}",
+        "url": "={{ $json.url }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "oAuth2Api",
         "options": {}

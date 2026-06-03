@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "[DEV] Smart Agent — Analyze Notes",
   "nodes": [
     {
@@ -17,20 +17,34 @@
     },
     {
       "parameters": {
+        "jsCode": "const notes = $input.first().json.body?.notes || '';\nconst payload = {\n  model: 'gpt-4o',\n  temperature: 0.3,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es Jarvis, expert en productivite. Analyse les notes et genere un plan d action. Reponds UNIQUEMENT en JSON valide avec : action_plan (array de strings, 3-5 etapes prioritisees), email_draft (objet {subject, body} ou null si pas necessaire), summary (string, 1 phrase).'\n    },\n    {\n      role: 'user',\n      content: 'Analyse ces notes :\\n\\n' + notes\n    }\n  ]\n};\nreturn [{ json: { body: JSON.stringify(payload), notes } }];"
+      },
+      "id": "prepare-node",
+      "name": "Préparer requête",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.openai.com/v1/chat/completions",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o', temperature: 0.3, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Tu es Jarvis, expert en productivité. Analyse les notes et génère un plan d action. Réponds UNIQUEMENT en JSON valide avec : action_plan (array de strings, 3-5 étapes prioritisées), email_draft (objet {subject, body} ou null si pas nécessaire), summary (string, 1 phrase).' }, { role: 'user', content: 'Analyse ces notes :\\n\\n' + $json.body.notes }] }) }}",
+        "specifyBody": "string",
+        "body": "={{ $json.body }}",
         "options": {}
       },
       "id": "openai-analyze",
       "name": "Analyser avec GPT-4o",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 300],
+      "position": [720, 300],
       "continueOnFail": true,
       "credentials": {
         "httpHeaderAuth": { "id": "5M4kmujo7Cv8RjjE", "name": "Header Auth account" }
@@ -38,13 +52,13 @@
     },
     {
       "parameters": {
-        "jsCode": "let parsed;\ntry {\n  const content = $json.choices?.[0]?.message?.content || $json.error || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — réessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse échouée.' };\n}\nreturn [{ json: parsed }];"
+        "jsCode": "let parsed;\ntry {\n  const content = $json.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — reessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse echouee.' };\n}\nreturn [{ json: parsed }];"
       },
       "id": "parse-node",
       "name": "Parser la réponse",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [720, 300],
+      "position": [960, 300],
       "continueOnFail": true
     },
     {
@@ -61,21 +75,21 @@
       "name": "Email à envoyer ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [960, 300]
+      "position": [1200, 300]
     },
     {
       "parameters": {
         "sendTo": "={{ $('Webhook').first().json.body.recipient_email || 'ouat.abou34@gmail.com' }}",
-        "subject": "={{ $json.email_draft.subject }}",
+        "subject": "={{ $('Parser la réponse').first().json.email_draft.subject }}",
         "emailType": "text",
-        "message": "={{ $json.email_draft.body }}",
+        "message": "={{ $('Parser la réponse').first().json.email_draft.body }}",
         "options": {}
       },
       "id": "gmail-send",
       "name": "Envoyer email draft",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [1200, 180],
+      "position": [1440, 180],
       "continueOnFail": true,
       "credentials": {
         "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" }
@@ -90,17 +104,18 @@
       "name": "Répondre",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1440, 300]
+      "position": [1680, 300]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Analyser avec GPT-4o", "type": "main", "index": 0 }]] },
-    "Analyser avec GPT-4o": { "main": [[{ "node": "Parser la réponse", "type": "main", "index": 0 }]] },
-    "Parser la réponse": { "main": [[{ "node": "Email à envoyer ?", "type": "main", "index": 0 }]] },
+    "Webhook":              { "main": [[{ "node": "Préparer requête",      "type": "main", "index": 0 }]] },
+    "Préparer requête":     { "main": [[{ "node": "Analyser avec GPT-4o", "type": "main", "index": 0 }]] },
+    "Analyser avec GPT-4o": { "main": [[{ "node": "Parser la réponse",    "type": "main", "index": 0 }]] },
+    "Parser la réponse":    { "main": [[{ "node": "Email à envoyer ?",    "type": "main", "index": 0 }]] },
     "Email à envoyer ?": {
       "main": [
         [{ "node": "Envoyer email draft", "type": "main", "index": 0 }],
-        [{ "node": "Répondre", "type": "main", "index": 0 }]
+        [{ "node": "Répondre",            "type": "main", "index": 0 }]
       ]
     },
     "Envoyer email draft": { "main": [[{ "node": "Répondre", "type": "main", "index": 0 }]] }

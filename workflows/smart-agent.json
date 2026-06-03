@@ -30,7 +30,7 @@
         "method": "POST",
         "url": "https://api.openai.com/v1/chat/completions",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "openAiApi",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.body }}",
@@ -43,7 +43,7 @@
       "position": [720, 300],
       "continueOnFail": true,
       "credentials": {
-        "httpHeaderAuth": { "id": "F99p27Ao9ucj5aeX", "name": "Header Auth account" }
+        "openAiApi": { "id": "aNQ7WpgQ7Tm2YyGg", "name": "OpenAI account" }
       }
     },
     {

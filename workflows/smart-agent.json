@@ -31,19 +31,15 @@
         "url": "https://api.openai.com/v1/chat/completions",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
-        },
         "sendBody": true,
-        "specifyBody": "string",
-        "body": "={{ $json.body }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
         "options": {}
       },
       "id": "openai-analyze",
       "name": "Analyser avec GPT-4o",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4,
       "position": [720, 300],
       "continueOnFail": true,
       "credentials": {

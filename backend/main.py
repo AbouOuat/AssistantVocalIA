@@ -15,7 +15,12 @@ from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
-from backend.services.ai_service import ConversationContext, chat_completion, chat_completion_stream
+from backend.services.ai_service import (
+    ConversationContext,
+    chat_completion,
+    chat_completion_stream,
+    chat_completion_with_tools,
+)
 from backend.services.memory_service import memory_service
 from backend.services.voice_service import (
     check_realtime_access,
@@ -94,35 +99,190 @@ app.add_middleware(
 )
 
 
+_TOOL_PROGRESS: dict[str, str] = {
+    "classifier_emails_gmail":   "🔍 Lecture et analyse des emails Gmail...",
+    "classifier_emails_outlook": "🔍 Lecture et analyse des emails Outlook...",
+    "lire_emails_en_memoire":    "📬 Consultation des emails en mémoire...",
+    "morning_briefing":          "🌅 Préparation du briefing du matin...",
+    "creer_rappel":              "📝 Création du rappel...",
+    "rechercher_emails":         "🔍 Recherche dans Gmail et Outlook...",
+    "creer_brouillon_gmail":     "✍️ Création du brouillon Gmail...",
+    "envoyer_email_outlook":     "📤 Envoi de l'email via Outlook...",
+    "analyser_notes":            "🤖 Analyse des notes et création du plan d'action...",
+    "rechercher_memoire":        "🧠 Recherche en mémoire...",
+}
+
+def _format_emails_context(source: str, emails: list) -> str:
+    lines = [f"## Emails récents {source} ({len(emails)})"]
+    for e in emails[:10]:
+        urgence = f" [{e.get('urgence')}]" if e.get('urgence') not in (None, 'faible') else ""
+        lines.append(
+            f"- De : {e.get('from_name') or e.get('from', '?')} <{e.get('from_email', '')}>"
+            f" | Objet : {e.get('subject', '?')}"
+            f" | Action : {e.get('action', '?')}{urgence}"
+            f" | Résumé : {e.get('resume', '')}"
+            + (f" | Échéance : {e['echeance']}" if e.get('echeance') else "")
+        )
+    return "\n".join(lines)
+
+async def _execute_tool(name: str, args: dict, user_id: int) -> str:
+    """Exécute un outil Jarvis et retourne le résultat en texte pour GPT-4o."""
+    if name == "classifier_emails_gmail":
+        limit = min(int(args.get("limit", 10)), 50)
+        result = await call_webhook("email-classifier", {"user_id": user_id, "limit": limit})
+        if result and result.get("emails_structured"):
+            await memory_service.set(
+                user_id, "context", "recent_emails_gmail",
+                result["emails_structured"], ttl_seconds=86400,
+            )
+        if not result:
+            return "Le workflow Gmail est injoignable. Vérifie qu'il est actif sur n8n."
+        if result.get("no_emails"):
+            return f"Aucun email Gmail non lu dans les 8 dernières heures. {result.get('skipped', 0)} ignorés automatiquement."
+        return result.get("summary", f"{result.get('processed', 0)} emails Gmail analysés.")
+
+    if name == "classifier_emails_outlook":
+        limit = min(int(args.get("limit", 10)), 50)
+        result = await call_webhook("outlook-email-classifier", {"user_id": user_id, "limit": limit}, timeout=45.0)
+        if result and result.get("emails_structured"):
+            await memory_service.set(
+                user_id, "context", "recent_emails_outlook",
+                result["emails_structured"], ttl_seconds=86400,
+            )
+        if not result:
+            return "Le workflow Outlook est injoignable. Vérifie qu'il est actif sur n8n."
+        if result.get("no_emails"):
+            return f"Aucun email Outlook récent. {result.get('skipped', 0)} ignorés."
+        return result.get("summary", f"{result.get('processed', 0)} emails Outlook analysés.")
+
+    if name == "lire_emails_en_memoire":
+        source = args.get("source", "tous")
+        parts = []
+        if source in ("gmail", "tous"):
+            emails = await memory_service.get(user_id, "context", "recent_emails_gmail")
+            if emails:
+                parts.append(_format_emails_context("Gmail", emails))
+        if source in ("outlook", "tous"):
+            emails = await memory_service.get(user_id, "context", "recent_emails_outlook")
+            if emails:
+                parts.append(_format_emails_context("Outlook", emails))
+        if not parts:
+            return "Aucun email en mémoire. Demande d'abord une classification (ex: 'analyse mes emails')."
+        return "\n\n".join(parts)
+
+    if name == "morning_briefing":
+        result = await call_webhook("morning-briefing", {"user_id": user_id})
+        if not result:
+            return "Le workflow Morning Briefing est injoignable. Vérifie qu'il est actif sur n8n."
+        return result.get("briefing", "Briefing reçu.")
+
+    if name == "creer_rappel":
+        texte = args.get("texte", "")
+        echeance = args.get("echeance")
+        if not texte:
+            return "Texte du rappel manquant."
+        key = f"task_{int(time.time() * 1000)}"
+        reminder = {"text": texte, "created_at": datetime.utcnow().isoformat(), "done": False}
+        if echeance:
+            reminder["due_at"] = echeance
+        await memory_service.set(user_id, "tasks", key, reminder)
+        await call_webhook("reminders", {"user_id": user_id, "text": texte, "due_at": echeance or ""})
+        return f"Rappel créé : « {texte} »" + (f", échéance : {echeance}" if echeance else ".")
+
+    if name == "rechercher_emails":
+        q = args.get("q", "").strip()
+        source = args.get("source", "tous")
+        limit = min(int(args.get("limit", 10)), 50)
+        date_from = args.get("date_from", "")
+        parts = []
+
+        if source in ("gmail", "tous") and q:
+            r = await call_webhook("gmail-search", {"q": q, "limit": limit})
+            if r and r.get("ok") and r.get("emails"):
+                emails = r["emails"]
+                lines = [f"### Gmail — {len(emails)} résultat(s) pour « {q} »"]
+                for e in emails:
+                    lines.append(f"- {e.get('from_name') or e.get('from')} | {e.get('subject')} | {e.get('snippet','')[:120]}")
+                parts.append("\n".join(lines))
+            elif r and not r.get("ok"):
+                parts.append(f"Gmail : {r.get('error', 'Aucun résultat.')}")
+            else:
+                parts.append("Gmail : aucun email trouvé.")
+
+        if source in ("outlook", "tous"):
+            r = await call_webhook("outlook-search", {"q": q, "limit": limit, "date_from": date_from})
+            if r and r.get("ok") and r.get("emails"):
+                emails = r["emails"]
+                lines = [f"### Outlook — {len(emails)} résultat(s)"]
+                for e in emails:
+                    lines.append(f"- {e.get('from_name') or e.get('from')} | {e.get('subject')} | {e.get('snippet','')[:120]}")
+                parts.append("\n".join(lines))
+            elif r and not r.get("ok"):
+                parts.append(f"Outlook : {r.get('error', 'Aucun résultat.')}")
+            else:
+                parts.append("Outlook : aucun email trouvé.")
+
+        return "\n\n".join(parts) if parts else "Aucun résultat trouvé."
+
+    if name == "analyser_notes":
+        notes = args.get("notes", "").strip()
+        if not notes:
+            return "Notes manquantes. Précise le contenu à analyser."
+        result = await call_webhook("smart-agent", {"user_id": user_id, "notes": notes})
+        if not result:
+            return "Le workflow Smart Agent est injoignable. Vérifie qu'il est actif sur n8n."
+        if not result.get("action_plan"):
+            return "L'analyse n'a pas retourné de plan. Réessaie avec des notes plus détaillées."
+        plan = "\n".join(f"• {step}" for step in result["action_plan"])
+        email_note = "\n\n📩 Email draft créé et envoyé." if result.get("email_sent") else ""
+        return f"Plan d'action :\n{plan}{email_note}"
+
+    if name == "creer_brouillon_gmail":
+        to = args.get("to", "").strip()
+        subject = args.get("subject", "").strip()
+        body = args.get("body", "").strip()
+        if not all([to, subject, body]):
+            return "Champs manquants : to, subject et body sont requis."
+        result = await call_webhook("gmail-draft", {"to": to, "subject": subject, "body": body})
+        if not result or not result.get("ok"):
+            err = result.get("error", "Erreur inconnue") if result else "Workflow gmail-draft injoignable."
+            return f"Impossible de créer le brouillon : {err}"
+        return f"Brouillon Gmail créé ✅\nÀ : {to}\nObjet : {subject}\nTu peux le relire et l'envoyer depuis Gmail."
+
+    if name == "envoyer_email_outlook":
+        to = args.get("to", "").strip()
+        subject = args.get("subject", "").strip()
+        body = args.get("body", "").strip()
+        if not all([to, subject, body]):
+            return "Champs manquants : to, subject et body sont requis."
+        result = await call_webhook("send-outlook-email", {"to": to, "subject": subject, "body": body})
+        if not result or not result.get("ok"):
+            return "Envoi échoué. Vérifie le workflow send-outlook-email et les credentials Outlook."
+        return f"Email envoyé via Outlook ✅\nÀ : {result.get('sent_to', to)}\nObjet : {result.get('subject', subject)}"
+
+    if name == "rechercher_memoire":
+        requete = args.get("requete", "").lower()
+        all_mem = await memory_service.get_all_scopes(user_id)
+        results = []
+        for scope, data in all_mem.items():
+            if scope == "context":
+                continue
+            for key, value in data.items():
+                if requete in str(value).lower() or requete in key.lower():
+                    results.append(f"[{scope}/{key}] {str(value)[:300]}")
+        if not results:
+            return f"Rien trouvé en mémoire pour « {requete} »."
+        return "\n".join(results[:8])
+
+    return f"Outil inconnu : {name}."
+
+
 async def _send_ws(websocket: WebSocket, payload: dict) -> None:
     """Envoie un message WebSocket sans lever d'exception si la connexion est fermée."""
     try:
         await websocket.send_text(json.dumps(payload))
     except Exception:
         pass
-
-
-def _get_progress_steps(text: str) -> list[str]:
-    """Retourne les messages de progression selon la commande détectée."""
-    t = text.lower()
-    if any(k in t for k in ["outlook", "emails outlook", "email avocat"]):
-        return [
-            "🔍 Connexion à Outlook...",
-            "🤖 Analyse IA des emails...",
-            "📬 Finalisation de la synthèse...",
-        ]
-    if any(k in t for k in ["classify", "email summary", "synthèse emails", "synthese emails",
-                              "derniers mails", "analyze my last"]):
-        return [
-            "🔍 Lecture des emails Gmail...",
-            "🤖 Classification IA...",
-            "📬 Synthèse en cours...",
-        ]
-    if any(k in t for k in ["start my day", "morning briefing", "commence ma journée"]):
-        return ["🌤️ Récupération météo & agenda..."]
-    if any(k in t for k in ["analyze my notes", "analyse mes notes"]):
-        return ["🧠 Analyse de tes notes..."]
-    return []
 
 
 async def _format_compte_rendu(transcript: str) -> dict:
@@ -171,26 +331,22 @@ async def _format_compte_rendu(transcript: str) -> dict:
     return data
 
 
-def _parse_email_limit(text: str) -> int:
-    """Extrait et valide la limite d'emails depuis le texte utilisateur."""
-    match = re.search(r'\b(\d+)\b', text)
-    if not match:
-        return 10
-    limit = int(match.group(1))
-    if limit < 1:
-        return 1
-    if limit > 50:
-        return 50
-    return limit
+_DICTATION_TRIGGERS = {
+    "compte-rendu", "compte rendu", "rédige un compte", "note de réunion",
+    "meeting notes", "procès-verbal", "pv de réunion", "dictée reunion",
+}
+
+def _is_dictation_trigger(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in _DICTATION_TRIGGERS)
 
 
 async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None:
-    """
-    Détecte les commandes quick actions et appelle le webhook n8n correspondant.
-    Retourne (chat_text, vocal_text) ou None si pas de commande reconnue.
-    - chat_text : texte complet affiché dans le chat
-    - vocal_text : résumé court (≤ 3 phrases) synthétisé en voix
-    """
+    """Obsolète. Toutes les commandes passent par function calling. Conservé pour compatibilité."""
+    return None
+
+
+async def _handle_n8n_command_legacy(text: str, user_id: int) -> tuple[str, str] | None:
     t = text.lower().strip()
 
     # ── Morning Briefing ─────────────────────────────────────────────────────
@@ -223,6 +379,12 @@ async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None
             {"user_id": user_id, "limit": limit},
             timeout=45.0,
         )
+
+        if result and result.get("emails_structured"):
+            await memory_service.set(
+                user_id, "context", "recent_emails_outlook",
+                result["emails_structured"], ttl_seconds=86400,
+            )
 
         if not result:
             msg = (
@@ -280,6 +442,12 @@ async def _handle_n8n_command(text: str, user_id: int) -> tuple[str, str] | None
         limit_note = " (limité à 50 par sécurité)" if re.search(r'\b(\d+)\b', t) and int(re.search(r'\b(\d+)\b', t).group(1)) > 50 else ""
 
         result = await call_webhook("email-classifier", {"user_id": user_id, "limit": limit})
+
+        if result and result.get("emails_structured"):
+            await memory_service.set(
+                user_id, "context", "recent_emails_gmail",
+                result["emails_structured"], ttl_seconds=86400,
+            )
 
         if not result:
             msg = (
@@ -513,15 +681,13 @@ async def http_chat(body: ChatRequest):
     if not uid:
         raise HTTPException(status_code=503, detail="Demo user not ready")
 
-    n8n_result = await _handle_n8n_command(body.text, uid)
-    if n8n_result:
-        chat_text, _ = n8n_result
-        return {"response": chat_text}
-
     ctx = _contexts.get(uid) or ConversationContext()
     _contexts[uid] = ctx
     try:
-        reply = await chat_completion(body.text, ctx)
+        async def _http_tool_exec(name: str, args: dict) -> str:
+            return await _execute_tool(name, args, uid)
+
+        reply, _ = await chat_completion_with_tools(body.text, ctx, _http_tool_exec)
     except Exception as e:
         logger.error(f"HTTP chat error: {e}")
         raise HTTPException(status_code=500, detail="AI error")
@@ -654,43 +820,33 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     continue
                 ctx = _contexts[user_id]
 
-                # Progress ticker pour les commandes n8n longues
-                steps = _get_progress_steps(content)
-                ticker_task: asyncio.Task | None = None
-                if steps:
-                    await _send_ws(websocket, {"type": "progress", "message": steps[0]})
-                    if len(steps) > 1:
-                        async def _ticker(remaining=steps[1:]):
-                            for step in remaining:
-                                await asyncio.sleep(10)
-                                await _send_ws(websocket, {"type": "progress", "message": step})
-                        ticker_task = asyncio.create_task(_ticker())
+                async def _on_tool(tool_name: str):
+                    await _send_ws(websocket, {
+                        "type": "progress",
+                        "message": _TOOL_PROGRESS.get(tool_name, "⚡ Traitement en cours..."),
+                    })
 
-                try:
-                    n8n_result = await _handle_n8n_command(content, user_id)
-                finally:
-                    if ticker_task:
-                        ticker_task.cancel()
+                async def _tool_exec(name: str, args: dict) -> str:
+                    return await _execute_tool(name, args, user_id)
 
-                if n8n_result:
-                    chat_text, vocal_text = n8n_result
-                    ctx.add_message("user", content)
-                    ctx.add_message("assistant", chat_text)
-                    await _send_ws(websocket, {"type": "response", "content": chat_text})
-                    try:
-                        tts_audio = await text_to_speech(vocal_text)
-                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(tts_audio)})
-                    except Exception as tts_err:
-                        logger.warning(f"TTS n8n response failed: {tts_err}")
-                    continue
+                streamed: list[str] = []
 
-                # Streaming GPT-4o standard
-                full_response = ""
-                async for chunk in chat_completion_stream(content, ctx):
-                    full_response += chunk
+                async def _on_chunk(chunk: str):
+                    streamed.append(chunk)
                     await _send_ws(websocket, {"type": "stream_chunk", "content": chunk})
 
-                await _send_ws(websocket, {"type": "response", "content": full_response})
+                reply, tools_called = await chat_completion_with_tools(
+                    content, ctx, _tool_exec,
+                    on_tool_call=_on_tool,
+                    on_stream_chunk=_on_chunk,
+                )
+                await _send_ws(websocket, {"type": "response", "content": reply})
+                if tools_called:
+                    try:
+                        tts_audio = await text_to_speech(reply)
+                        await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(tts_audio)})
+                    except Exception as tts_err:
+                        logger.warning(f"TTS tool response failed: {tts_err}")
 
             # ── Audio voix ──────────────────────────────────────────────────
             elif msg_type == "voice_input":
@@ -798,42 +954,31 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                         await _send_ws(websocket, {"type": "tts", "audio": encode_audio_base64(audio_response)})
                     continue
 
-                # ── Commande n8n ? ──────────────────────────────────────────
-                voice_steps = _get_progress_steps(transcript)
-                voice_ticker: asyncio.Task | None = None
-                if voice_steps:
-                    await _send_ws(websocket, {"type": "progress", "message": voice_steps[0]})
-                    if len(voice_steps) > 1:
-                        async def _voice_ticker(remaining=voice_steps[1:]):
-                            for step in remaining:
-                                await asyncio.sleep(10)
-                                await _send_ws(websocket, {"type": "progress", "message": step})
-                        voice_ticker = asyncio.create_task(_voice_ticker())
-
-                try:
-                    n8n_result = await _handle_n8n_command(transcript, user_id)
-                finally:
-                    if voice_ticker:
-                        voice_ticker.cancel()
-
-                if n8n_result:
-                    chat_text, vocal_text = n8n_result
-                    try:
-                        audio_response = await text_to_speech(vocal_text)
-                    except Exception:
-                        audio_response = b""
-                    await _send_ws(websocket, {
-                        "type": "voice_response",
-                        "transcript": transcript,
-                        "audio": encode_audio_base64(audio_response),
-                    })
-                    await _send_ws(websocket, {"type": "response", "content": chat_text, "voice_origin": True})
+                # ── Trigger dictée avocat (état machine stateful) ───────────
+                if _is_dictation_trigger(transcript):
+                    _dictation_state[user_id] = {"mode": "waiting_dictation"}
+                    vocal_trigger = "Mode dictée activé. Je t'écoute. Décris ta réunion et dis c'est tout quand tu as terminé."
+                    chat_trigger = "🎙️ **Mode dictée activé.**\n\nDécris ta réunion : participants, points discutés, décisions, actions.\n\nDis **« c'est tout »** quand tu as fini."
+                    audio_trigger = await text_to_speech(vocal_trigger)
+                    await _send_ws(websocket, {"type": "voice_response", "transcript": transcript, "audio": encode_audio_base64(audio_trigger)})
+                    await _send_ws(websocket, {"type": "response", "content": chat_trigger, "voice_origin": True})
                     continue
 
-                # ── Pipeline IA standard ────────────────────────────────────
+                # ── Pipeline IA avec function calling ───────────────────────
                 ctx = _contexts[user_id]
                 try:
-                    reply_text = await chat_completion(transcript, ctx)
+                    async def _on_voice_tool(tool_name: str):
+                        await _send_ws(websocket, {
+                            "type": "progress",
+                            "message": _TOOL_PROGRESS.get(tool_name, "⚡ Traitement en cours..."),
+                        })
+
+                    async def _voice_tool_exec(name: str, args: dict) -> str:
+                        return await _execute_tool(name, args, user_id)
+
+                    reply_text, _ = await chat_completion_with_tools(
+                        transcript, ctx, _voice_tool_exec, on_tool_call=_on_voice_tool
+                    )
                     audio_response = await text_to_speech(reply_text)
                 except Exception as e:
                     logger.error(f"AI pipeline error [user_id={user_id}]: {e}")
@@ -847,6 +992,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     "type": "voice_response",
                     "transcript": transcript,
                     "audio": encode_audio_base64(audio_response),
+                })
+                await _send_ws(websocket, {
+                    "type": "response",
+                    "content": reply_text,
+                    "voice_origin": True,
                 })
 
             # ── Memory set ──────────────────────────────────────────────────

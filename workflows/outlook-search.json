@@ -1,0 +1,80 @@
+{
+  "name": "[DEV] Outlook Search",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "outlook-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-400, 280],
+      "webhookId": "outlook-search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim();\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nconst dateFrom = String(body.date_from || '');\nlet filter = '';\nif (dateFrom) filter = `receivedDateTime ge ${dateFrom}T00:00:00Z`;\nreturn [{ json: { q, limit, filter } }];"
+      },
+      "id": "config-node",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 280]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://graph.microsoft.com/v1.0/me/messages?$top=' + $json.limit + '&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,importance' + ($json.q ? '&$search=%22' + encodeURIComponent($json.q) + '%22' : '') + ($json.filter ? '&$filter=' + encodeURIComponent($json.filter) : '') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "graph-search",
+      "name": "Graph - Chercher emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [80, 280],
+      "continueOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuration').first().json;\nconst data = $input.first().json;\nif (data.error) {\n  return [{ json: { ok: false, error: 'Outlook inaccessible.', emails: [], count: 0 } }];\n}\nconst messages = data.value || [];\nconst emails = messages.map(m => ({\n  id: m.id,\n  from: m.from?.emailAddress?.address || '',\n  from_name: m.from?.emailAddress?.name || '',\n  from_email: m.from?.emailAddress?.address || '',\n  subject: m.subject || '(sans objet)',\n  date: m.receivedDateTime,\n  snippet: (m.bodyPreview || '').slice(0, 400),\n  importance: m.importance,\n  source: 'outlook'\n}));\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+      },
+      "id": "format-node",
+      "name": "Formater résultats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 280],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond-node",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [560, 280]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis":          { "main": [[{ "node": "Configuration",           "type": "main", "index": 0 }]] },
+    "Configuration":           { "main": [[{ "node": "Graph - Chercher emails", "type": "main", "index": 0 }]] },
+    "Graph - Chercher emails": { "main": [[{ "node": "Formater résultats",      "type": "main", "index": 0 }]] },
+    "Formater résultats":      { "main": [[{ "node": "Répondre Webhook",        "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "email", "search", "outlook"]
+}

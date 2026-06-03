@@ -1,0 +1,76 @@
+{
+  "name": "[DEV] Gmail Search",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gmail-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-400, 280],
+      "webhookId": "gmail-search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim() || 'is:unread newer_than:7d';\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nreturn [{ json: { q, limit } }];"
+      },
+      "id": "config-node",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 280]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ $json.limit }}",
+        "filters": { "q": "={{ $json.q }}" }
+      },
+      "id": "gmail-read",
+      "name": "Gmail - Chercher emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [80, 280],
+      "continueOnFail": true,
+      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuration').first().json;\nconst items = $input.all();\nif (!items.length || items[0].json?.error) {\n  return [{ json: { ok: false, error: 'Gmail inaccessible ou aucun résultat.', emails: [], count: 0 } }];\n}\nconst emails = items.map(item => {\n  const m = item.json;\n  const headers = m.payload?.headers || [];\n  const from = headers.find(h => h.name === 'From')?.value || '';\n  const subject = headers.find(h => h.name === 'Subject')?.value || '(sans objet)';\n  const date = headers.find(h => h.name === 'Date')?.value || '';\n  const match = from.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: m.id,\n    from,\n    from_name: (match?.[1] || from).trim(),\n    from_email: match?.[2] || from,\n    subject,\n    date,\n    snippet: (m.snippet || '').slice(0, 400),\n    source: 'gmail'\n  };\n}).filter(e => e.id);\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+      },
+      "id": "format-node",
+      "name": "Formater résultats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 280],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond-node",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [560, 280]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis":       { "main": [[{ "node": "Configuration",       "type": "main", "index": 0 }]] },
+    "Configuration":        { "main": [[{ "node": "Gmail - Chercher emails", "type": "main", "index": 0 }]] },
+    "Gmail - Chercher emails": { "main": [[{ "node": "Formater résultats", "type": "main", "index": 0 }]] },
+    "Formater résultats":   { "main": [[{ "node": "Répondre Webhook",    "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "email", "search"]
+}

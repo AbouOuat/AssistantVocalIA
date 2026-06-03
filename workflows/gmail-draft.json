@@ -1,0 +1,100 @@
+{
+  "name": "[DEV] Gmail Draft",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gmail-draft",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-400, 280],
+      "webhookId": "gmail-draft"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || '').trim();\nconst bodyText = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to || !subject || !bodyText) {\n  return [{ json: { ok: false, error: 'Champs manquants : to, subject, body requis.', to, subject } }];\n}\nreturn [{ json: { ok: true, to, subject, bodyText, replyToId } }];"
+      },
+      "id": "validate-node",
+      "name": "Valider paramètres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 280],
+      "continueOnFail": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.ok }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-valid",
+      "name": "Paramètres OK ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [80, 280]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $('Valider paramètres').first().json.error }) }}"
+      },
+      "id": "respond-error",
+      "name": "Répondre - Erreur",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [320, 140]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "sendTo": "={{ $('Valider paramètres').first().json.to }}",
+        "subject": "={{ $('Valider paramètres').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Valider paramètres').first().json.bodyText }}",
+        "options": {}
+      },
+      "id": "gmail-draft",
+      "name": "Gmail - Créer brouillon",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [320, 380],
+      "continueOnFail": true,
+      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, draft_id: $json.id, to: $('Valider paramètres').first().json.to, subject: $('Valider paramètres').first().json.subject, message: 'Brouillon Gmail créé avec succès.' }) }}"
+      },
+      "id": "respond-success",
+      "name": "Répondre - Succès",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [560, 380]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis":         { "main": [[{ "node": "Valider paramètres",      "type": "main", "index": 0 }]] },
+    "Valider paramètres":     { "main": [[{ "node": "Paramètres OK ?",         "type": "main", "index": 0 }]] },
+    "Paramètres OK ?": {
+      "main": [
+        [{ "node": "Répondre - Erreur",        "type": "main", "index": 0 }],
+        [{ "node": "Gmail - Créer brouillon",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail - Créer brouillon": { "main": [[{ "node": "Répondre - Succès", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "email", "gmail", "draft"]
+}

@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = items[0].json.body || {};\nconst to = body.to || '';\nconst subject = body.subject || 'Message de Jarvis';\nconst content = body.body || '';\nif (!to) {\n  return [{ json: { ok: false, error: 'Destinataire manquant' } }];\n}\nreturn [{ json: { to, subject, content } }];"
+        "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || 'Message de Jarvis').trim();\nconst content = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to) {\n  return [{ json: { ok: false, error: 'Destinataire manquant' } }];\n}\nreturn [{ json: { to, subject, content, replyToId } }];"
       },
       "id": "validate-input",
       "name": "Valider parametres",
@@ -34,7 +34,7 @@
         "genericAuthType": "oAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  message: {\n    subject: $json.subject,\n    body: {\n      contentType: 'Text',\n      content: $json.content\n    },\n    toRecipients: [\n      { emailAddress: { address: $json.to } }\n    ]\n  },\n  saveToSentItems: true\n} }}",
+        "jsonBody": "={{ {\n  message: {\n    subject: $json.subject,\n    body: { contentType: 'Text', content: $json.content },\n    toRecipients: [{ emailAddress: { address: $json.to } }]\n  },\n  saveToSentItems: true\n} }}",
         "options": {}
       },
       "id": "graph-send",

@@ -47,7 +47,7 @@
       "position": [720, 300],
       "continueOnFail": true,
       "credentials": {
-        "httpHeaderAuth": { "id": "openai-header-auth", "name": "OpenAI Header Auth" }
+        "httpHeaderAuth": { "id": "F99p27Ao9ucj5aeX", "name": "Header Auth account" }
       }
     },
     {

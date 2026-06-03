@@ -106,6 +106,7 @@ _TOOL_PROGRESS: dict[str, str] = {
     "morning_briefing":          "🌅 Préparation du briefing du matin...",
     "creer_rappel":              "📝 Création du rappel...",
     "rechercher_emails":         "🔍 Recherche dans Gmail et Outlook...",
+    "creer_evenement_agenda":    "📅 Ajout dans Google Calendar...",
     "creer_brouillon_gmail":     "✍️ Création du brouillon Gmail...",
     "envoyer_email_outlook":     "📤 Envoi de l'email via Outlook...",
     "analyser_notes":            "🤖 Analyse des notes et création du plan d'action...",
@@ -255,6 +256,28 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         plan = "\n".join(f"• {step}" for step in result["action_plan"])
         email_note = "\n\n📩 Email draft créé et envoyé." if result.get("email_sent") else ""
         return f"Plan d'action :\n{plan}{email_note}"
+
+    if name == "creer_evenement_agenda":
+        titre = args.get("titre", "").strip()
+        debut = args.get("debut", "").strip()
+        fin   = args.get("fin", "").strip()
+        if not all([titre, debut, fin]):
+            return "Titre, début et fin sont requis pour créer un événement."
+        result = await call_webhook("calendar-create-event", {
+            "titre": titre, "debut": debut, "fin": fin,
+            "description": args.get("description", ""),
+            "lieu": args.get("lieu", ""),
+        })
+        if not result or not result.get("ok"):
+            err = result.get("error", "Erreur inconnue") if result else "Workflow calendar-create-event injoignable."
+            return f"Impossible de créer l'événement : {err}"
+        from datetime import datetime
+        try:
+            d = datetime.fromisoformat(debut)
+            date_str = d.strftime("%A %d %B à %Hh%M")
+        except Exception:
+            date_str = debut
+        return f"Événement créé ✅\n**{titre}** — {date_str}"
 
     if name == "creer_brouillon_gmail":
         to = args.get("to", "").strip()

@@ -1,0 +1,106 @@
+{
+  "name": "[DEV] Google Calendar Create Event",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "calendar-create-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-400, 280],
+      "webhookId": "calendar-create-event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst titre = String(body.titre || '').trim();\nconst debut = String(body.debut || '').trim();\nconst fin = String(body.fin || '').trim();\nconst description = String(body.description || '').trim();\nconst lieu = String(body.lieu || '').trim();\nif (!titre || !debut || !fin) {\n  return [{ json: { ok: false, error: 'Champs requis manquants : titre, debut, fin.' } }];\n}\n// Valider que les dates sont parsables\ntry { new Date(debut).toISOString(); new Date(fin).toISOString(); } catch(e) {\n  return [{ json: { ok: false, error: 'Format de date invalide. Utilise ISO 8601 (ex: 2026-06-04T09:00:00).' } }];\n}\nreturn [{ json: { ok: true, titre, debut, fin, description, lieu } }];"
+      },
+      "id": "validate-node",
+      "name": "Valider paramètres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 280],
+      "continueOnFail": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.ok }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-valid",
+      "name": "Paramètres OK ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [80, 280]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $('Valider paramètres').first().json.error }) }}"
+      },
+      "id": "respond-error",
+      "name": "Répondre - Erreur",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [320, 140]
+    },
+    {
+      "parameters": {
+        "calendar": { "__rl": true, "value": "primary", "mode": "id" },
+        "start": "={{ $('Valider paramètres').first().json.debut }}",
+        "end": "={{ $('Valider paramètres').first().json.fin }}",
+        "additionalFields": {
+          "summary": "={{ $('Valider paramètres').first().json.titre }}",
+          "description": "={{ $('Valider paramètres').first().json.description }}",
+          "location": "={{ $('Valider paramètres').first().json.lieu }}"
+        }
+      },
+      "id": "gcal-create",
+      "name": "Google Calendar - Créer événement",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.1,
+      "position": [320, 380],
+      "continueOnFail": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "gcalendar-creds",
+          "name": "Google Calendar Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: !$json.error, event_id: $json.id, titre: $('Valider paramètres').first().json.titre, debut: $('Valider paramètres').first().json.debut, fin: $('Valider paramètres').first().json.fin, html_link: $json.htmlLink, error: $json.error || null }) }}"
+      },
+      "id": "respond-success",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [560, 380]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis":     { "main": [[{ "node": "Valider paramètres",              "type": "main", "index": 0 }]] },
+    "Valider paramètres": { "main": [[{ "node": "Paramètres OK ?",                 "type": "main", "index": 0 }]] },
+    "Paramètres OK ?": {
+      "main": [
+        [{ "node": "Répondre - Erreur",                   "type": "main", "index": 0 }],
+        [{ "node": "Google Calendar - Créer événement",   "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Calendar - Créer événement": { "main": [[{ "node": "Répondre Webhook", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "calendar", "google"]
+}

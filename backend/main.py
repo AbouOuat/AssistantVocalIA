@@ -758,6 +758,19 @@ async def http_chat(body: ChatRequest):
     return {"response": reply}
 
 
+@app.post("/api/debug/tool")
+async def debug_tool(body: dict):
+    """Debug endpoint — appelle _execute_tool directement sans GPT-4o."""
+    name = body.get("name", "")
+    args = body.get("args", {})
+    uid = _demo_user_id or 2
+    try:
+        result = await _execute_tool(name, args, uid)
+        return {"ok": True, "result": result}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 @app.get("/devices")
 async def get_devices():
     from backend.services.domotics_service import domotics_service

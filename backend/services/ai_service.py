@@ -419,7 +419,11 @@ async def chat_completion_with_tools(
                     args = json.loads(t["arguments"])
                 except Exception:
                     args = {}
-                result = await tool_executor(t["name"], args)
+                try:
+                    result = await tool_executor(t["name"], args)
+                except Exception as te:
+                    result = f"Erreur outil {t['name']}: {te}"
+                    logger.error(f"Tool {t['name']} error: {te}", exc_info=True)
                 messages.append({"role": "tool", "tool_call_id": t["id"], "content": str(result)})
             continue  # relancer pour la réponse finale
 
@@ -449,7 +453,11 @@ async def chat_completion_with_tools(
                 args = json.loads(tc.function.arguments)
             except Exception:
                 args = {}
-            result = await tool_executor(tc.function.name, args)
+            try:
+                result = await tool_executor(tc.function.name, args)
+            except Exception as te:
+                result = f"Erreur outil {tc.function.name}: {te}"
+                logger.error(f"Tool {tc.function.name} error: {te}", exc_info=True)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
 
     reply = "J'ai rencontré un problème lors du traitement. Réessaie."

@@ -743,8 +743,10 @@ async def http_chat(body: ChatRequest):
 
         reply, _ = await chat_completion_with_tools(body.text, ctx, _http_tool_exec)
     except Exception as e:
-        logger.error(f"HTTP chat error: {e}")
-        raise HTTPException(status_code=500, detail="AI error")
+        logger.error(f"HTTP chat error: {e}", exc_info=True)
+        # Ajouter un message assistant placeholder pour éviter la cascade (2 user msgs consécutifs)
+        ctx.add_message("assistant", "Une erreur est survenue. Réessaie.")
+        raise HTTPException(status_code=500, detail=f"AI error: {type(e).__name__}: {e}")
     return {"response": reply}
 
 

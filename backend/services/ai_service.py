@@ -1,9 +1,12 @@
 """AI Service — GPT-4o conversation avec gestion du contexte et streaming."""
 
 import json
+import logging
 import os
 from openai import AsyncOpenAI
 from backend.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 _client: AsyncOpenAI | None = None

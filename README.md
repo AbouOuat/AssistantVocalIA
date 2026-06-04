@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | 🌐 **Démo live** | https://jarvis.obyz.biz |
-| 🎥 **Vidéo démo** | *(lien à venir — accès restreint)* |
+| 🎥 **Vidéo démo** | https://www.loom.com/share/91633a6b07a741c6b5db919ce1fe1faf |
 | 📊 **Présentation** | [PRESENTATION_JARVIS.html](./PRESENTATION_JARVIS.html) |
 | 📄 **Recap technique** | [RECAP_SESSION_2026-06-04.md](./RECAP_SESSION_2026-06-04.md) |
 

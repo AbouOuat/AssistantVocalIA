@@ -74,5 +74,5 @@ Frontend : http://localhost:3000 · Backend : http://localhost:8000
 
 ---
 
-*Construit en 4 jours · Solo · Sans lever de fonds*
+*Construit en ~40h effectives · Solo · Sans lever de fonds*
 *Obyz · 2026*

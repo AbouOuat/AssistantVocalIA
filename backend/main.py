@@ -206,16 +206,8 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         reminder = {"text": texte, "created_at": datetime.utcnow().isoformat(), "done": False}
         if echeance:
             reminder["due_at"] = echeance
-        try:
-            await memory_service.set(user_id, "tasks", key, reminder)
-        except Exception as e:
-            logger.error(f"creer_rappel memory.set failed: {e}", exc_info=True)
-            return f"DEBUG memory.set error: {type(e).__name__}: {e}"
-        try:
-            await call_webhook("reminders", {"user_id": user_id, "text": texte, "due_at": echeance or ""})
-        except Exception as e:
-            logger.error(f"creer_rappel webhook failed: {e}", exc_info=True)
-            return f"DEBUG webhook error: {type(e).__name__}: {e}"
+        await memory_service.set(user_id, "tasks", key, reminder)
+        await call_webhook("reminders", {"user_id": user_id, "text": texte, "due_at": echeance or ""})
         return f"Rappel créé : « {texte} »" + (f", échéance : {echeance}" if echeance else ".")
 
     if name == "rechercher_emails":
@@ -280,7 +272,6 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         if not result or not result.get("ok"):
             err = result.get("error", "Erreur inconnue") if result else "Workflow calendar-create-event injoignable."
             return f"Impossible de créer l'événement : {err}"
-        from datetime import datetime
         try:
             d = datetime.fromisoformat(debut)
             date_str = d.strftime("%A %d %B à %Hh%M")
@@ -756,19 +747,6 @@ async def http_chat(body: ChatRequest):
         ctx.add_message("assistant", "Une erreur est survenue. Réessaie.")
         raise HTTPException(status_code=500, detail=f"AI error: {type(e).__name__}: {e}")
     return {"response": reply}
-
-
-@app.post("/api/debug/tool")
-async def debug_tool(body: dict):
-    """Debug endpoint — appelle _execute_tool directement sans GPT-4o."""
-    name = body.get("name", "")
-    args = body.get("args", {})
-    uid = _demo_user_id or 2
-    try:
-        result = await _execute_tool(name, args, uid)
-        return {"ok": True, "result": result}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
 @app.get("/devices")

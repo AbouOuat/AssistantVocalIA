@@ -210,15 +210,16 @@ JARVIS_TOOLS = [
                 "Créer un événement dans Google Calendar. "
                 "À utiliser pour : 'ajoute un rdv', 'crée un événement', 'bloque du temps', "
                 "'réunion jeudi à 14h', 'ajoute ça dans mon agenda'. "
-                "IMPORTANT : convertis toujours la date/heure en ISO 8601 avec l'année complète "
-                f"(aujourd'hui = {__import__('datetime').date.today().isoformat()})."
+                "IMPORTANT : convertis toujours la date/heure en ISO 8601 avec timezone Europe/Paris (+02:00 en été, +01:00 en hiver). "
+                f"Aujourd'hui = {__import__('datetime').date.today().isoformat()}. "
+                "Exemple : demain à 9h = 2026-06-05T09:00:00+02:00"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "titre":       {"type": "string", "description": "Titre de l'événement"},
-                    "debut":       {"type": "string", "description": "Début ISO 8601, ex: 2026-06-04T09:00:00"},
-                    "fin":         {"type": "string", "description": "Fin ISO 8601, ex: 2026-06-04T10:00:00"},
+                    "debut":       {"type": "string", "description": "Début ISO 8601 avec timezone Paris, ex: 2026-06-04T09:00:00+02:00"},
+                    "fin":         {"type": "string", "description": "Fin ISO 8601 avec timezone Paris, ex: 2026-06-04T10:00:00+02:00"},
                     "description": {"type": "string", "description": "Description optionnelle"},
                     "lieu":        {"type": "string", "description": "Lieu optionnel"},
                 },

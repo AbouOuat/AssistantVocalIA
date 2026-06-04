@@ -206,8 +206,16 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         reminder = {"text": texte, "created_at": datetime.utcnow().isoformat(), "done": False}
         if echeance:
             reminder["due_at"] = echeance
-        await memory_service.set(user_id, "tasks", key, reminder)
-        await call_webhook("reminders", {"user_id": user_id, "text": texte, "due_at": echeance or ""})
+        try:
+            await memory_service.set(user_id, "tasks", key, reminder)
+        except Exception as e:
+            logger.error(f"creer_rappel memory.set failed: {e}", exc_info=True)
+            return f"DEBUG memory.set error: {type(e).__name__}: {e}"
+        try:
+            await call_webhook("reminders", {"user_id": user_id, "text": texte, "due_at": echeance or ""})
+        except Exception as e:
+            logger.error(f"creer_rappel webhook failed: {e}", exc_info=True)
+            return f"DEBUG webhook error: {type(e).__name__}: {e}"
         return f"Rappel créé : « {texte} »" + (f", échéance : {echeance}" if echeance else ".")
 
     if name == "rechercher_emails":

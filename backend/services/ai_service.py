@@ -19,9 +19,18 @@ def _get_client() -> AsyncOpenAI:
     return _client
 
 def _build_system_prompt() -> str:
+    from datetime import date, timedelta
     gmail = os.getenv("GMAIL_USER_EMAIL", "ouat.abou34@gmail.com")
     outlook = "ouat.abou34@outlook.fr"
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
     return f"""Tu es Jarvis, l'assistant IA vocal personnel d'Abo (Aboubakary Ouattara). Tu es intelligent, concis et fiable.
+
+## Date et heure actuelles
+- Aujourd'hui : {today.strftime("%A %d %B %Y")} ({today.isoformat()})
+- Demain : {tomorrow.strftime("%A %d %B %Y")} ({tomorrow.isoformat()})
+- Fuseau : Europe/Paris (UTC+2 en été)
+- IMPORTANT : pour tout agenda, utilise TOUJOURS ces dates. N'utilise JAMAIS de dates antérieures à {today.isoformat()}.
 
 ## Profil utilisateur
 - Prénom : Abo
@@ -55,7 +64,9 @@ Exception : lire, lister, résumer, créer un rappel, créer un événement agen
 - Pour les réponses longues (liste d'emails) : résume à l'oral, détaille dans le chat"""
 
 
-SYSTEM_PROMPT = _build_system_prompt()
+# Ne pas mettre en cache — la date doit être recalculée à chaque appel
+def _get_system_prompt() -> str:
+    return _build_system_prompt()
 
 JARVIS_TOOLS = [
     {
@@ -324,7 +335,7 @@ class ConversationContext:
             self.history = self.history[-self.max_history:]
 
     def get_messages(self) -> list[dict]:
-        return [{"role": "system", "content": SYSTEM_PROMPT}, *self.history]
+        return [{"role": "system", "content": _get_system_prompt()}, *self.history]
 
     def clear(self):
         self.history = []

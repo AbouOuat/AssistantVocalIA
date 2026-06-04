@@ -34,9 +34,9 @@ def _build_system_prompt() -> str:
 - Si l'utilisateur demande ses mails sans préciser → commence par lire_emails_en_memoire (les deux boîtes)
 
 ## Règle de confirmation
-Avant toute action irréversible (envoyer un email, créer une tâche) :
+Avant toute action irréversible (envoyer un email) :
 - Confirme en une phrase courte avant d'exécuter.
-Exception : lire, lister, résumer → agis directement sans demander.
+Exception : lire, lister, résumer, créer un rappel, créer un événement agenda, mémoriser → agis directement sans demander.
 
 ## Capacités
 - Lire et analyser Gmail et Outlook
@@ -278,6 +278,30 @@ JARVIS_TOOLS = [
                     "requete": {"type": "string", "description": "Ce qu'on cherche en mémoire"}
                 },
                 "required": ["requete"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sauvegarder_memoire",
+            "description": (
+                "Sauvegarder une information, préférence ou note dans la mémoire persistante de Jarvis. "
+                "À utiliser quand l'utilisateur dit 'souviens-toi que', 'mémorise', 'retiens que', "
+                "'note que', 'remember that'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cle":    {"type": "string", "description": "Identifiant court en snake_case, ex: preference_briefing_heure"},
+                    "valeur": {"type": "string", "description": "Contenu à mémoriser"},
+                    "scope":  {
+                        "type": "string",
+                        "enum": ["preferences", "projects", "tasks"],
+                        "description": "Catégorie : preferences (habitudes/goûts), projects (infos projets), tasks (tâches/notes)",
+                    },
+                },
+                "required": ["cle", "valeur"],
             },
         },
     },

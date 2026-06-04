@@ -111,6 +111,7 @@ _TOOL_PROGRESS: dict[str, str] = {
     "envoyer_email_outlook":     "📤 Envoi de l'email via Outlook...",
     "analyser_notes":            "🤖 Analyse des notes et création du plan d'action...",
     "rechercher_memoire":        "🧠 Recherche en mémoire...",
+    "sauvegarder_memoire":       "💾 Mémorisation en cours...",
 }
 
 def _format_emails_context(source: str, emails: list) -> str:
@@ -301,6 +302,17 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         if not result or not result.get("ok"):
             return "Envoi échoué. Vérifie le workflow send-outlook-email et les credentials Outlook."
         return f"Email envoyé via Outlook ✅\nÀ : {result.get('sent_to', to)}\nObjet : {result.get('subject', subject)}"
+
+    if name == "sauvegarder_memoire":
+        cle    = args.get("cle", "").strip().replace(" ", "_")
+        valeur = args.get("valeur", "").strip()
+        scope  = args.get("scope", "preferences")
+        if not cle or not valeur:
+            return "Clé et valeur sont requises pour mémoriser."
+        if scope not in ("preferences", "projects", "tasks"):
+            scope = "preferences"
+        await memory_service.set(user_id, scope, cle, valeur)
+        return f"Mémorisé ✅ [{scope}/{cle}] : {valeur}"
 
     if name == "rechercher_memoire":
         requete = args.get("requete", "").lower()

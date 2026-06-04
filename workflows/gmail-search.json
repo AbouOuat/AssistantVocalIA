@@ -32,7 +32,7 @@
         "returnAll": false,
         "limit": "={{ $json.limit }}",
         "filters": { "q": "={{ $json.q }}" },
-        "options": { "dataPropertyName": "message", "format": "metadata" }
+        "options": { "dataPropertyName": "message", "format": "metadata", "metadataHeaders": ["From", "Subject", "Date"] }
       },
       "id": "gmail-read",
       "name": "Gmail - Chercher emails",
@@ -44,7 +44,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cfg = $('Configuration').first().json;\nconst items = $input.all();\nif (!items.length || items[0].json?.error) {\n  return [{ json: { ok: false, error: 'Gmail inaccessible ou aucun résultat.', emails: [], count: 0 } }];\n}\nconst emails = items.map(item => {\n  const m = item.json;\n  // Support format=metadata (payload.headers) ET format n8n abstrait (m.from/subject/date)\n  const headers = m.payload?.headers || [];\n  const fromRaw = headers.find(h => h.name === 'From')?.value || m.from || '';\n  const subject = headers.find(h => h.name === 'Subject')?.value || m.subject || '(sans objet)';\n  const date = headers.find(h => h.name === 'Date')?.value || m.date || '';\n  const match = fromRaw.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: m.id,\n    from: fromRaw,\n    from_name: (match?.[1] || fromRaw).trim(),\n    from_email: match?.[2] || fromRaw,\n    subject,\n    date,\n    snippet: (m.snippet || '').slice(0, 400),\n    source: 'gmail'\n  };\n}).filter(e => e.id);\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+        "jsCode": "const cfg = $('Configuration').first().json;\nconst items = $input.all();\nif (!items.length || items[0].json?.error) {\n  return [{ json: { ok: false, error: 'Gmail inaccessible.', emails: [], count: 0 } }];\n}\nconst emails = items.map(item => {\n  const m = item.json;\n  // n8n Gmail node v2 expose From/Subject avec majuscule, internalDate en ms\n  const fromRaw = m.From || m.from || '';\n  const subject = m.Subject || m.subject || '(sans objet)';\n  const date = m.internalDate\n    ? new Date(parseInt(m.internalDate)).toISOString()\n    : (m.Date || m.date || '');\n  const match = fromRaw.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: m.id,\n    from: fromRaw,\n    from_name: (match?.[1] || fromRaw).trim(),\n    from_email: match?.[2] || fromRaw,\n    subject,\n    date,\n    snippet: (m.snippet || '').slice(0, 400),\n    source: 'gmail'\n  };\n}).filter(e => e.id);\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
       },
       "id": "format-node",
       "name": "Formater résultats",

@@ -7,7 +7,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
 from pydantic import BaseModel
@@ -808,7 +808,7 @@ async def get_pending_reminders():
     if not uid:
         return {"due": [], "count": 0}
     tasks = await memory_service.get_all(uid, "tasks")
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     due = []
     for task_id, task in tasks.items():
         if task.get("done") or task.get("notified"):
@@ -817,7 +817,10 @@ async def get_pending_reminders():
         if not due_at:
             continue
         try:
-            if datetime.fromisoformat(due_at) <= now:
+            dt = datetime.fromisoformat(due_at)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt <= now:
                 due.append({"id": task_id, **task})
         except ValueError:
             pass

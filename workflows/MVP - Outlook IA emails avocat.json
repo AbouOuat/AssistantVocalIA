@@ -1,0 +1,331 @@
+{
+  "name": "MVP - Outlook IA emails avocat",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "12f21ebe-552c-439f-8bc0-37418c2e893f",
+      "name": "Demarrage manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1456,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,12,18 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "8c74deed-da2a-405d-a0e1-d03dba6d72f3",
+      "name": "Planification 8h 12h 18h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1456,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "max-emails",
+              "name": "maxEmails",
+              "value": 10,
+              "type": "number"
+            },
+            {
+              "id": "summary-recipient",
+              "name": "summaryRecipient",
+              "value": "aboubakary_ouattara@hotmail.com",
+              "type": "string"
+            },
+            {
+              "id": "openai-model",
+              "name": "openAiModel",
+              "value": "gpt-4o-mini",
+              "type": "string"
+            },
+            {
+              "id": "lookback-hours",
+              "name": "lookbackHours",
+              "value": 8,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6d799bed-0ed0-4f96-ad17-ad444789d39d",
+      "name": "Configuration MVP",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1216,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top={{ $json.maxEmails }}&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,body,importance,categories,hasAttachments,webLink",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "5fe7e780-7fc7-4b4b-a811-89b69808fd62",
+      "name": "Graph - Lire emails recents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -976,
+        144
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuration MVP').first().json;\nconst messages = items[0].json.value || [];\nconst excludedSenderFragments = [\n  'no-reply', 'noreply', 'newsletter', 'notification', 'notifications', 'marketing', 'facebookmail', 'linkedin', 'microsoft-noreply'\n];\nconst excludedSubjectFragments = [\n  'newsletter', 'desabonnement', 'désabonnement', 'promotion', 'notification automatique', 'alerte automatique', 'absence du bureau', 'automatic reply'\n];\nconst cutoff = new Date(Date.now() - Number(cfg.lookbackHours || 8) * 60 * 60 * 1000);\nconst prepared = [];\nconst skipped = [];\nfor (const m of messages) {\n  const categories = Array.isArray(m.categories) ? m.categories : [];\n  const sender = (m.from?.emailAddress?.address || '').toLowerCase();\n  const senderName = m.from?.emailAddress?.name || '';\n  const subject = m.subject || '';\n  const subjectLower = subject.toLowerCase();\n  const receivedAt = new Date(m.receivedDateTime);\n  const alreadyProcessed = categories.includes('IA - Traite') || categories.includes('IA - Exclu');\n  const excludedBySender = excludedSenderFragments.some(x => sender.includes(x));\n  const excludedBySubject = excludedSubjectFragments.some(x => subjectLower.includes(x));\n  const tooOld = Number.isFinite(receivedAt.getTime()) && receivedAt < cutoff;\n  if (alreadyProcessed || excludedBySender || excludedBySubject || tooOld) {\n    skipped.push({ id: m.id, subject, sender, reason: alreadyProcessed ? 'deja traite' : excludedBySender ? 'expediteur exclu' : excludedBySubject ? 'objet exclu' : 'trop ancien' });\n    continue;\n  }\n  const bodyText = (m.body?.content || m.bodyPreview || '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 4000);\n  prepared.push({\n    id: m.id,\n    subject,\n    sender,\n    senderName,\n    receivedDateTime: m.receivedDateTime,\n    importance: m.importance,\n    categories,\n    hasAttachments: Boolean(m.hasAttachments),\n    webLink: m.webLink,\n    bodyText\n  });\n}\nreturn [{ json: { emails: prepared, skipped, runAt: new Date().toISOString() } }];"
+      },
+      "id": "3285122a-894b-40e6-a6ee-0c6dc3fbf7cc",
+      "name": "Preparer lot emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $('Configuration MVP').first().json.openAiModel,\n  text: {\n    format: {\n      type: 'json_object'\n    }\n  },\n  temperature: 0.1,\n  input: [\n    {\n      role: 'system',\n      content: 'Tu classes des emails pour un cabinet d avocat. Reponds uniquement en JSON valide. N invente pas de faits. Un email peut avoir plusieurs etiquettes. Ne propose jamais un envoi automatique. Les brouillons doivent rester prudents et validables.'\n    },\n    {\n      role: 'user',\n      content: JSON.stringify({\n        consigne: 'Classe chaque email. Champs attendus pour chaque email: id, urgence=haute|moyenne|faible, interlocuteur=client|confrere|juridiction|expert|assureur|notaire|mandant_immobilier|administration|autre|indetermine, action=repondre|lire|relancer|classer|aucune, echeance_detectee=true|false, date_echeance=YYYY-MM-DD ou null, resume=phrase courte, raison_urgence=phrase courte ou vide, brouillon_recommande=true|false, brouillon=texte court ou vide. Ajoute aussi global_summary en 5 lignes maximum.',\n        criteres_urgence: ['date limite proche', 'audience', 'convocation', 'delai', 'assignation', 'ordonnance', 'jugement', 'conclusions', 'message juridiction', 'demande de signature rapide', 'relance avec delai', 'termes urgent ou imperatif'],\n        emails: $json.emails\n      })\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "0f81e8c4-2b8b-4a77-a507-4b773fa1b9be",
+      "name": "OpenAI - Classer et resumer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -496,
+        144
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5M4kmujo7Cv8RjjE",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Preparer lot emails').first().json;\nfunction extractResponseText(response) {\n  if (response.output_text) return response.output_text;\n  const output = response.output || [];\n  const chunks = [];\n  for (const item of output) {\n    for (const content of item.content || []) {\n      if (content.type === 'output_text' && content.text) chunks.push(content.text);\n      if (content.type === 'text' && content.text) chunks.push(content.text);\n    }\n  }\n  return chunks.join('\\n') || '{}';\n}\nconst content = extractResponseText(items[0].json);\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { emails: [], global_summary: 'Erreur de parsing de la reponse IA.' };\n}\nconst originalsById = new Map((source.emails || []).map(e => [e.id, e]));\nconst analyses = (parsed.emails || []).map(a => {\n  const original = originalsById.get(a.id) || {};\n  const categories = new Set(original.categories || []);\n  const urgency = String(a.urgence || 'faible').toLowerCase();\n  const action = String(a.action || 'aucune').toLowerCase();\n  if (urgency === 'haute') categories.add('IA - Urgent');\n  if (action === 'repondre') categories.add('IA - A repondre');\n  if (action === 'relancer') categories.add('IA - Relance');\n  if (action === 'lire') categories.add('IA - A lire');\n  if (action === 'classer') categories.add('IA - A classer');\n  if (a.echeance_detectee) categories.add('IA - Echeance');\n  categories.add('IA - Traite');\n  return {\n    ...original,\n    analyse: a,\n    nextCategories: Array.from(categories)\n  };\n});\nconst urgent = analyses.filter(x => x.analyse?.urgence === 'haute');\nconst repondre = analyses.filter(x => x.analyse?.action === 'repondre');\nconst echeances = analyses.filter(x => x.analyse?.echeance_detectee);\nconst drafts = analyses.filter(x => x.analyse?.brouillon_recommande && x.analyse?.brouillon);\nfunction line(x) {\n  const a = x.analyse || {};\n  return `- ${x.senderName || x.sender} | ${x.subject || '(sans objet)'} | ${a.resume || ''}${a.raison_urgence ? ' | ' + a.raison_urgence : ''}`;\n}\nconst summaryText = [\n  `Synthese emails IA - ${new Date().toLocaleString('fr-FR')}`,\n  '',\n  `Emails traites: ${analyses.length}`,\n  `Emails ignores: ${(source.skipped || []).length}`,\n  '',\n  '1. Urgents',\n  urgent.length ? urgent.map(line).join('\\n') : '- Aucun email urgent detecte.',\n  '',\n  '2. Reponses a preparer',\n  repondre.length ? repondre.map(line).join('\\n') : '- Aucune reponse prioritaire detectee.',\n  '',\n  '3. Echeances detectees',\n  echeances.length ? echeances.map(x => `- ${x.analyse.date_echeance || 'date a confirmer'} | ${x.senderName || x.sender} | ${x.subject || '(sans objet)'} | ${x.analyse.resume || ''}`).join('\\n') : '- Aucune echeance detectee.',\n  '',\n  '4. Brouillons proposes',\n  drafts.length ? drafts.map(x => `- ${x.senderName || x.sender} | ${x.subject || '(sans objet)'}`).join('\\n') : '- Aucun brouillon propose.',\n  '',\n  '5. Synthese generale',\n  parsed.global_summary || '- Aucun element complementaire.',\n  '',\n  'Note: les pieces jointes ne sont pas analysees dans cette version.'\n].join('\\n');\nreturn [{ json: { analyses, summaryText, processedCount: analyses.length, skippedCount: (source.skipped || []).length } }];"
+      },
+      "id": "c54abe83-f0b1-4ecc-8c97-70edfd511a5a",
+      "name": "Parser analyse IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analyses = items[0].json.analyses || [];\nreturn analyses.map(x => ({\n  json: {\n    id: x.id,\n    patchUrl: `https://graph.microsoft.com/v1.0/me/messages/${x.id}`,\n    categories: x.nextCategories,\n    subject: x.subject,\n    sender: x.sender,\n    analyse: x.analyse\n  }\n}));"
+      },
+      "id": "5c81ff95-7468-46fa-87df-f825a9a582d3",
+      "name": "Construire MAJ categories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.patchUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { categories: $json.categories } }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "id": "8e7d4acc-e0ca-4519-9c1e-02f62c5d0cce",
+      "name": "Graph - Appliquer categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        0
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  message: {\n    subject: 'Synthese IA Outlook - MVP',\n    body: {\n      contentType: 'Text',\n      content: $json.summaryText\n    },\n    toRecipients: [\n      { emailAddress: { address: $('Configuration MVP').first().json.summaryRecipient } }\n    ]\n  },\n  saveToSentItems: true\n} }}",
+        "options": {}
+      },
+      "id": "58c76fd7-a9aa-456c-899e-6a36d1735f23",
+      "name": "Graph - Envoyer synthese",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        288
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Demarrage manuel": {
+      "main": [
+        [
+          {
+            "node": "Configuration MVP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planification 8h 12h 18h": {
+      "main": [
+        [
+          {
+            "node": "Configuration MVP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration MVP": {
+      "main": [
+        [
+          {
+            "node": "Graph - Lire emails recents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Graph - Lire emails recents": {
+      "main": [
+        [
+          {
+            "node": "Preparer lot emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer lot emails": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Classer et resumer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Classer et resumer": {
+      "main": [
+        [
+          {
+            "node": "Parser analyse IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser analyse IA": {
+      "main": [
+        [
+          {
+            "node": "Construire MAJ categories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Graph - Envoyer synthese",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire MAJ categories": {
+      "main": [
+        [
+          {
+            "node": "Graph - Appliquer categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "03ad5278-2dad-4f13-9198-6955ba3cc2bf",
+  "meta": {
+    "instanceId": "41eba01350b0b9f283d69e82a6f6b8878d14f61616180be077e38a22ad9d1a63"
+  },
+  "id": "ytOE3wWZdUgivNbw",
+  "tags": []
+}

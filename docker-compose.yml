@@ -3,6 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: jarvis
       POSTGRES_USER: postgres
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     healthcheck:
@@ -29,6 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://postgres:password@postgres:5432/jarvis
       REDIS_URL: redis://redis:6379
@@ -47,6 +50,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_BACKEND_WS_URL: wss://jarvis.obyz.biz/ws
     depends_on:
@@ -56,12 +60,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
     depends_on:
       - frontend
       - backend
 
   n8n:
     image: n8nio/n8n:latest
+    restart: unless-stopped
     environment:
       N8N_HOST: n8n.obyz.biz
       N8N_PORT: "5678"
@@ -72,6 +80,8 @@ services:
       N8N_USER_MANAGEMENT_JWT_SECRET: ${SECRET_KEY}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    ports:
+      - "5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
 

@@ -1,29 +1,232 @@
 {
-  "name": "[DEV] Send Outlook Email",
+  "name": "send-outlook-email",
   "nodes": [
     {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "send-outlook-email",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "webhook-trigger",
-      "name": "Webhook Jarvis",
-      "type": "n8n-nodes-base.webhook",
+      "parameters": {},
+      "id": "ba484419-5e6f-40ce-adc4-0cace49747f7",
+      "name": "Démarrage manuel",
+      "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-400, 200],
-      "webhookId": "send-outlook-email"
+      "position": [
+        -160,
+        -224
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || 'Message de Jarvis').trim();\nconst content = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to) {\n  return [{ json: { ok: false, error: 'Destinataire manquant' } }];\n}\nreturn [{ json: { to, subject, content, replyToId } }];"
+        "httpMethod": "POST",
+        "path": "outlook-email-classifier",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "id": "validate-input",
-      "name": "Valider parametres",
+      "id": "c7038fc1-e5cd-45ff-8eb3-be221a49f833",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        160
+      ],
+      "webhookId": "outlook-email-classifier"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Limite depuis le webhook si dispo, sinon défaut 10, toujours 1-50\nlet limit = 10;\nconst summaryRecipient = 'ouat.abou34@outlook.fr';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) { /* trigger sans body — valeur par défaut */ }\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+      },
+      "id": "66c785cb-c610-4d63-99e7-98bcf6583e1a",
+      "name": "Configuration MVP",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-160, 200],
+      "position": [
+        80,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top={{ $json.maxEmails }}&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,body,importance,categories,hasAttachments,webLink",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "74a6ae81-0ff7-4990-941c-1a3130590779",
+      "name": "Graph - Lire emails recents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        -32
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuration MVP').first().json;\nconst messages = (items[0].json.value || items[0].json.error ? [] : []).concat(items[0].json.value || []);\nconst excludedSenderFragments = [\n  'no-reply', 'noreply', 'newsletter', 'notification', 'notifications',\n  'marketing', 'facebookmail', 'linkedin', 'microsoft-noreply'\n];\nconst excludedSubjectFragments = [\n  'newsletter', 'desabonnement', 'désabonnement', 'promotion',\n  'notification automatique', 'alerte automatique', 'absence du bureau', 'automatic reply'\n];\nconst cutoff = new Date(Date.now() - Number(cfg.lookbackHours || 8) * 60 * 60 * 1000);\nconst prepared = [];\nconst skipped = [];\nfor (const m of messages) {\n  const categories = Array.isArray(m.categories) ? m.categories : [];\n  const sender = (m.from?.emailAddress?.address || '').toLowerCase();\n  const senderName = m.from?.emailAddress?.name || '';\n  const subject = m.subject || '(sans objet)';\n  const subjectLower = subject.toLowerCase();\n  const receivedAt = new Date(m.receivedDateTime);\n  const alreadyProcessed = categories.includes('IA - Traite') || categories.includes('IA - Exclu');\n  const excludedBySender = excludedSenderFragments.some(x => sender.includes(x));\n  const excludedBySubject = excludedSubjectFragments.some(x => subjectLower.includes(x));\n  const tooOld = Number.isFinite(receivedAt.getTime()) && receivedAt < cutoff;\n  if (alreadyProcessed || excludedBySender || excludedBySubject || tooOld) {\n    skipped.push({\n      id: m.id, subject, sender,\n      reason: alreadyProcessed ? 'deja_traite' : excludedBySender ? 'expediteur_exclu' : excludedBySubject ? 'objet_exclu' : 'trop_ancien'\n    });\n    continue;\n  }\n  const bodyText = (m.body?.content || m.bodyPreview || '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .slice(0, 4000);\n  prepared.push({\n    id: m.id, subject, sender, senderName,\n    receivedDateTime: m.receivedDateTime,\n    importance: m.importance, categories,\n    hasAttachments: Boolean(m.hasAttachments),\n    webLink: m.webLink, bodyText\n  });\n}\nreturn [{ json: { emails: prepared, skipped, no_emails: prepared.length === 0, runAt: new Date().toISOString() } }];"
+      },
+      "id": "6cc41e1e-efaf-4bc1-ad4b-feed589a4239",
+      "name": "Preparer lot emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        -32
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Critères configurables avec l'avocate ──────────────────────\nconst MOTS_URGENCE = [\n  // Procédure judiciaire\n  'assignation', 'convocation', 'audience', 'jugement', 'ordonnance',\n  'conclusions', 'appel', 'pourvoi', 'signification', 'huissier',\n  // Délais\n  'délai', 'delai', 'échéance', 'echeance', 'prescription', 'forclusion',\n  // Urgence explicite\n  'urgent', 'urgence', 'impératif', 'imperatif', 'immédiat', 'immediat',\n  // Mise en demeure / relance\n  'mise en demeure', 'relance', 'injonction', 'sommation',\n  // Décisions\n  'arrêt', 'arret', 'décision', 'decision', 'notification'\n];\n// ───────────────────────────────────────────────────────────────\n\nconst source = items[0].json;\nconst emails_enrichis = (source.emails || []).map(email => {\n  const texte = `${email.subject || ''} ${email.bodyText || ''}`.toLowerCase();\n  const matches = MOTS_URGENCE.filter(kw => texte.includes(kw));\n  return { ...email, keyword_urgence: matches.length > 0, keyword_matches: matches };\n});\nconst nb_pre_urgents = emails_enrichis.filter(e => e.keyword_urgence).length;\nreturn [{ json: { ...source, emails: emails_enrichis, nb_pre_urgents } }];"
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Pré-détection keywords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        80
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.no_emails }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "05bf08e0-6e20-4346-9e2b-45ecc165d76a",
+      "name": "Emails presents ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, no_emails: true, processed: 0, skipped: $('Preparer lot emails').first().json.skipped.length, summary: '', summary_sent_to: $('Configuration MVP').first().json.summaryRecipient, urgent_count: 0 }) }}",
+        "options": {}
+      },
+      "id": "8a97c4ba-07a3-404b-979a-6ba8477d5f75",
+      "name": "Repondre - Aucun email",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $('Configuration MVP').first().json.openAiModel,\n  text: { format: { type: 'json_object' } },\n  temperature: 0.1,\n  input: [\n    {\n      role: 'system',\n      content: 'Tu classes des emails pour un cabinet d avocat. Reponds uniquement en JSON valide. N invente pas de faits. Un email peut avoir plusieurs etiquettes. Ne propose jamais un envoi automatique. Les brouillons doivent rester prudents et validables.'\n    },\n    {\n      role: 'user',\n      content: JSON.stringify({\n        consigne: 'Classe chaque email. Champs attendus: id, urgence=haute|moyenne|faible, interlocuteur=client|confrere|juridiction|expert|assureur|notaire|mandant_immobilier|administration|autre|indetermine, action=repondre|lire|relancer|classer|aucune, echeance_detectee=true|false, date_echeance=YYYY-MM-DD ou null, resume=phrase courte, raison_urgence=phrase courte ou vide, brouillon_recommande=true|false, brouillon=texte court ou vide. Ajoute aussi global_summary en 5 lignes maximum. Chaque email peut avoir keyword_urgence=true et keyword_matches=[...] issus dune pre-detection locale par mots-cles — si keyword_urgence=true, privilegier urgence=haute sauf si le contexte contredit clairement.',\n        criteres_urgence: ['date limite proche','audience','convocation','delai','assignation','ordonnance','jugement','conclusions','message juridiction','demande de signature rapide','relance avec delai','termes urgent ou imperatif'],\n        emails: $json.emails\n      })\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "7b1700d4-4b1a-4a12-bb47-77dd2ed23081",
+      "name": "OpenAI - Classer et resumer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5M4kmujo7Cv8RjjE",
+          "name": "Header Auth account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Preparer lot emails').first().json;\nfunction extractResponseText(response) {\n  if (response.output_text) return response.output_text;\n  const output = response.output || [];\n  const chunks = [];\n  for (const item of output) {\n    for (const content of item.content || []) {\n      if (content.type === 'output_text' && content.text) chunks.push(content.text);\n      if (content.type === 'text' && content.text) chunks.push(content.text);\n    }\n  }\n  return chunks.join('\\n') || '{}';\n}\nconst content = extractResponseText(items[0].json);\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { emails: [], global_summary: 'Erreur de parsing de la réponse IA.' };\n}\nconst originalsById = new Map((source.emails || []).map(e => [e.id, e]));\nconst analyses = (parsed.emails || []).map(a => {\n  const original = originalsById.get(a.id) || {};\n  const categories = new Set(original.categories || []);\n  const urgency = String(a.urgence || 'faible').toLowerCase();\n  const action = String(a.action || 'aucune').toLowerCase();\n  if (urgency === 'haute') categories.add('IA - Urgent');\n  if (action === 'repondre') categories.add('IA - A repondre');\n  if (action === 'relancer') categories.add('IA - Relance');\n  if (action === 'lire') categories.add('IA - A lire');\n  if (action === 'classer') categories.add('IA - A classer');\n  if (a.echeance_detectee) categories.add('IA - Echeance');\n  categories.add('IA - Traite');\n  return { ...original, analyse: a, nextCategories: Array.from(categories) };\n});\nconst urgent = analyses.filter(x => x.analyse?.urgence === 'haute');\nconst repondre = analyses.filter(x => x.analyse?.action === 'repondre');\nconst echeances = analyses.filter(x => x.analyse?.echeance_detectee);\nconst drafts = analyses.filter(x => x.analyse?.brouillon_recommande && x.analyse?.brouillon);\nfunction line(x) {\n  const a = x.analyse || {};\n  return `• ${x.senderName || x.sender} | ${x.subject || '(sans objet)'} | ${a.resume || ''}${a.raison_urgence ? ' — ' + a.raison_urgence : ''}`;\n}\nconst summaryText = [\n  `🤖 Synthèse Outlook IA — ${new Date().toLocaleString('fr-FR')}`,\n  `Analysés : ${analyses.length} | Ignorés : ${(source.skipped || []).length}`,\n  '',\n  '🚨 Urgents',\n  urgent.length ? urgent.map(line).join('\\n') : '• Aucun email urgent.',\n  '',\n  '📩 À répondre',\n  repondre.length ? repondre.map(line).join('\\n') : '• Aucune réponse prioritaire.',\n  '',\n  '📅 Échéances détectées',\n  echeances.length ? echeances.map(x => `• ${x.analyse.date_echeance || 'date à confirmer'} | ${x.senderName || x.sender} | ${x.subject || '(sans objet)'} | ${x.analyse.resume || ''}`).join('\\n') : '• Aucune échéance.',\n  '',\n  '📝 Brouillons proposés',\n  drafts.length ? drafts.map(x => `• ${x.senderName || x.sender} | ${x.subject || '(sans objet)'}`).join('\\n') : '• Aucun brouillon.',\n  '',\n  '📋 Synthèse générale',\n  parsed.global_summary || '• Rien à signaler.',\n  '',\n  'ℹ️ Les pièces jointes ne sont pas analysées dans cette version.'\n].join('\\n');\n// Structurer pour Redis\nconst emails_structured = analyses.map(a => ({\n  id: a.id,\n  from: a.sender || '',\n  from_name: a.senderName || (a.sender || '').split('@')[0],\n  from_email: a.sender || '',\n  subject: a.subject || '(sans objet)',\n  snippet: (a.bodyText || '').slice(0, 300),\n  urgence: a.analyse?.urgence || 'faible',\n  action: a.analyse?.action || 'lire',\n  resume: a.analyse?.resume || '',\n  echeance: a.analyse?.echeance_detectee ? (a.analyse?.date_echeance || null) : null,\n  source: 'outlook'\n}));\nreturn [{ json: { analyses, summaryText, processedCount: analyses.length, skippedCount: (source.skipped || []).length, urgentCount: urgent.length, repondreCount: repondre.length, emails_structured } }];"
+      },
+      "id": "b9dc3fca-8eab-47c1-ae73-c761f3a91cb9",
+      "name": "Parser analyse IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        112
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const analyses = items[0].json.analyses || [];\nreturn analyses.map(x => ({\n  json: {\n    id: x.id,\n    patchUrl: `https://graph.microsoft.com/v1.0/me/messages/${x.id}`,\n    categories: x.nextCategories,\n    subject: x.subject,\n    sender: x.sender\n  }\n}));"
+      },
+      "id": "bc3b8d8f-2130-4cdf-a312-bd442260c752",
+      "name": "Construire MAJ categories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.patchUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { categories: $json.categories } }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          }
+        }
+      },
+      "id": "0780907a-82dd-4dfd-9c7f-287c77dd5a4e",
+      "name": "Graph - Appliquer categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1808,
+        -16
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "ac71E7NKWmX5nq8h",
+          "name": "Connect_Outlook_ouat"
+        }
+      },
       "continueOnFail": true
     },
     {
@@ -34,46 +237,214 @@
         "genericAuthType": "oAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\n  message: {\n    subject: $json.subject,\n    body: { contentType: 'Text', content: $json.content },\n    toRecipients: [{ emailAddress: { address: $json.to } }]\n  },\n  saveToSentItems: true\n} }}",
+        "jsonBody": "={{ {\n  message: {\n    subject: '🤖 Synthèse Outlook IA — Jarvis',\n    body: {\n      contentType: 'Text',\n      content: $('Parser analyse IA').first().json.summaryText\n    },\n    toRecipients: [\n      { emailAddress: { address: $('Configuration MVP').first().json.summaryRecipient } }\n    ]\n  },\n  saveToSentItems: true\n} }}",
         "options": {}
       },
-      "id": "graph-send",
-      "name": "Graph - Envoyer email",
+      "id": "07393d6d-391d-45bd-8f63-4832e6e422de",
+      "name": "Graph - Envoyer synthese",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [80, 200],
-      "continueOnFail": true,
+      "position": [
+        1552,
+        240
+      ],
       "credentials": {
         "oAuth2Api": {
           "id": "ac71E7NKWmX5nq8h",
           "name": "Connect_Outlook_ouat"
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: $json.statusCode === undefined || $json.statusCode === 202, sent_to: $('Valider parametres').first().json.to, subject: $('Valider parametres').first().json.subject }) }}"
+        "responseBody": "={{ JSON.stringify({ ok: true, no_emails: false, processed: $('Parser analyse IA').first().json.processedCount, skipped: $('Parser analyse IA').first().json.skippedCount, summary: $('Parser analyse IA').first().json.summaryText, summary_sent_to: $('Configuration MVP').first().json.summaryRecipient, urgent_count: $('Parser analyse IA').first().json.urgentCount, repondre_count: $('Parser analyse IA').first().json.repondreCount, emails_structured: $('Parser analyse IA').first().json.emails_structured }) }}",
+        "options": {}
       },
-      "id": "respond-success",
+      "id": "1415e4b5-fcc3-4c3a-bea0-955cb6485779",
       "name": "Repondre Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [320, 200]
+      "position": [
+        1552,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,13 * * 1,3,5"
+            },
+            {
+              "field": "cronExpression"
+            }
+          ]
+        }
+      },
+      "id": "d3bc7bcb-c03f-42dd-84ff-c35ef4d68f81",
+      "name": "Planification 8h 13h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        -32
+      ]
     }
   ],
+  "pinData": {},
   "connections": {
+    "Démarrage manuel": {
+      "main": [
+        [
+          {
+            "node": "Configuration MVP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook Jarvis": {
-      "main": [[{ "node": "Valider parametres", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Configuration MVP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Valider parametres": {
-      "main": [[{ "node": "Graph - Envoyer email", "type": "main", "index": 0 }]]
+    "Configuration MVP": {
+      "main": [
+        [
+          {
+            "node": "Graph - Lire emails recents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Graph - Envoyer email": {
-      "main": [[{ "node": "Repondre Webhook", "type": "main", "index": 0 }]]
+    "Graph - Lire emails recents": {
+      "main": [
+        [
+          {
+            "node": "Preparer lot emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparer lot emails": {
+      "main": [
+        [
+          {
+            "node": "Pré-détection keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pré-détection keywords": {
+      "main": [
+        [
+          {
+            "node": "Emails presents ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails presents ?": {
+      "main": [
+        [
+          {
+            "node": "Repondre - Aucun email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OpenAI - Classer et resumer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Classer et resumer": {
+      "main": [
+        [
+          {
+            "node": "Parser analyse IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser analyse IA": {
+      "main": [
+        [
+          {
+            "node": "Construire MAJ categories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Graph - Envoyer synthese",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Repondre Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire MAJ categories": {
+      "main": [
+        [
+          {
+            "node": "Graph - Appliquer categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planification 8h 13h": {
+      "main": [
+        [
+          {
+            "node": "Configuration MVP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["jarvis", "hackathon", "outlook"]
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "cd84d05e-70ea-4f10-824d-617e818695d1",
+  "meta": {
+    "instanceId": "41eba01350b0b9f283d69e82a6f6b8878d14f61616180be077e38a22ad9d1a63"
+  },
+  "id": "QM72TX9oakuNnyo2",
+  "tags": []
 }

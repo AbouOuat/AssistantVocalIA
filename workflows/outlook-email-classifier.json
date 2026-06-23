@@ -31,7 +31,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Limite depuis le webhook si dispo, sinon défaut 10, toujours 1-50\nlet limit = 10;\nconst summaryRecipient = 'ouat.abou34@outlook.fr';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) { /* trigger sans body — valeur par défaut */ }\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+        "jsCode": "// Limite depuis le webhook si dispo, sinon défaut 10, toujours 1-50\nlet limit = 10;\nconst summaryRecipient = process.env.SUMMARY_RECIPIENT_EMAIL || 'ouat.abou34@outlook.fr';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) { /* trigger sans body — valeur par défaut */ }\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
       },
       "id": "1b0371d3-31e7-484f-ac48-d31fdeee6858",
       "name": "Configuration MVP",

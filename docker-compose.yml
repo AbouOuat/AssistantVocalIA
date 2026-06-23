@@ -78,6 +78,7 @@ services:
       N8N_USER_MANAGEMENT_JWT_SECRET: ${SECRET_KEY}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      SUMMARY_RECIPIENT_EMAIL: ${SUMMARY_RECIPIENT_EMAIL:-ouat.abou34@outlook.fr}
     ports:
       - "5678:5678"
     volumes:

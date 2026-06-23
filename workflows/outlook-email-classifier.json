@@ -290,6 +290,54 @@
         2784,
         -672
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analyses = $('Parser analyse IA').first().json.analyses || [];\nconst drafts = analyses.filter(a => a.analyse?.brouillon_recommande && a.analyse?.brouillon?.trim());\nif (drafts.length === 0) return [];\nreturn drafts.map(a => ({\n  json: {\n    subject: `RE: ${a.subject || ''}`,\n    body: a.analyse.brouillon,\n    to: a.sender || ''\n  }\n}));"
+      },
+      "id": "prepare-drafts-a1b2c3d4",
+      "name": "Préparer brouillons",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4496,
+        128
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  subject: $json.subject,\n  body: { contentType: 'Text', content: $json.body },\n  toRecipients: [{ emailAddress: { address: $json.to } }]\n} }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          }
+        }
+      },
+      "id": "graph-draft-a1b2c3d4",
+      "name": "Graph - Créer brouillon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4752,
+        128
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "cXwgnsn2JzgIpzFd",
+          "name": "Connect_Outlook_ouat"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -404,6 +452,22 @@
           },
           {
             "node": "Repondre Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Préparer brouillons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer brouillons": {
+      "main": [
+        [
+          {
+            "node": "Graph - Créer brouillon",
             "type": "main",
             "index": 0
           }

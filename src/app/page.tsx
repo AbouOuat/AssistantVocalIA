@@ -317,7 +317,13 @@ export default function Home() {
       {/* Zone orb + waveform */}
       <section className="flex flex-col items-center gap-4 py-8">
         <VoiceOrb state={orbState} onClick={toggleListening} />
-        <Waveform active={orbState === "speaking"} />
+        <AnimatePresence>
+          {orbState === "speaking" && (
+            <motion.div key="waveform" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.2 } }}>
+              <Waveform active={true} />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {progressMessage && (
             <motion.p

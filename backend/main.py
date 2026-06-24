@@ -203,8 +203,14 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         lines = [f"## BoÃ®te Outlook â€” {len(emails)} emails rÃ©cents (Ã  {result.get('fetched_at', '')[:16]})"]
         for e in emails[:10]:
             preview = f" | {e.get('bodyPreview', '')[:80]}" if e.get("bodyPreview") else ""
+            # Le noeud natif microsoftOutlook renvoie `from` comme string ou dict Graph API
+            from_raw = e.get("from", "?")
+            if isinstance(from_raw, dict):
+                from_addr = from_raw.get("emailAddress", {}).get("address", "?")
+            else:
+                from_addr = str(from_raw)
             lines.append(
-                f"- De : {e.get('from', {}).get('emailAddress', {}).get('address', e.get('from', '?'))} "
+                f"- De : {from_addr} "
                 f"| Objet : {e.get('subject', '?')} "
                 f"| {e.get('receivedDateTime', '')[:10]}"
                 f"{preview}"

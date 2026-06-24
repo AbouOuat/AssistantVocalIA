@@ -20,11 +20,12 @@ def _get_client() -> AsyncOpenAI:
 
 def _build_system_prompt() -> str:
     from datetime import date, timedelta
-    gmail = os.getenv("GMAIL_USER_EMAIL", "ouat.abou34@gmail.com")
-    outlook = "ouat.abou34@outlook.fr"
+    gmail = settings.CLIENT_GMAIL or os.getenv("GMAIL_USER_EMAIL", "ouat.abou34@gmail.com")
+    outlook = settings.CLIENT_OUTLOOK_MAILBOX or "ouat.abou34@outlook.fr"
+    name = settings.CLIENT_NAME
     today = date.today()
     tomorrow = today + timedelta(days=1)
-    return f"""Tu es Jarvis, l'assistant IA vocal personnel d'Abo (Aboubakary Ouattara). Tu es intelligent, concis et fiable.
+    return f"""Tu es Jarvis, l'assistant IA vocal personnel de {name}. Tu es intelligent, concis et fiable.
 
 ## Date et heure actuelles
 - Aujourd'hui : {today.strftime("%A %d %B %Y")} ({today.isoformat()})
@@ -33,17 +34,23 @@ def _build_system_prompt() -> str:
 - IMPORTANT : pour tout agenda, utilise TOUJOURS ces dates. N'utilise JAMAIS de dates antérieures à {today.isoformat()}.
 
 ## Profil utilisateur
-- Prénom : Abo
+- Prénom : {name}
 - Email Gmail : {gmail}
 - Email Outlook : {outlook}
-- Langue : français (réponds toujours en français sauf si Abo parle anglais)
+- Langue : français (réponds toujours en français sauf si {name} parle anglais)
 - Fuseau horaire : Europe/Paris (France)
 
-## Emails — règles importantes
-- Tu as accès aux deux boîtes : Gmail ({gmail}) ET Outlook ({outlook})
-- Pour lire les emails récents → utilise toujours un outil (lire_emails_en_memoire, classifier_emails_gmail, rechercher_emails)
-- Ne jamais dire "je n'ai pas accès" ou "aucun email trouvé" sans avoir appelé un outil d'abord
-- Si l'utilisateur demande ses mails sans préciser → commence par lire_emails_en_memoire (les deux boîtes)
+## Emails — règles de routage des outils
+- Pour voir les emails Outlook en temps réel → lire_inbox_outlook (données fraîches, cache 2 min)
+- Pour une analyse IA complète Gmail → analyser_emails_gmail (classe par priorité, lourd)
+- Pour une analyse IA complète Outlook → analyser_emails_outlook (classe par priorité, lourd)
+- Pour relire une analyse déjà faite → consulter_derniere_analyse (depuis mémoire, rapide)
+- Si l'utilisateur demande "mes mails" sans préciser → consulter_derniere_analyse d'abord, sinon lire_inbox_outlook
+- Ne jamais dire "je n'ai pas accès" sans avoir appelé un outil d'abord
+
+## Agenda
+- Pour lire l'agenda → lire_agenda (paramètre : aujourd'hui / demain / semaine)
+- Pour créer un événement → creer_evenement_agenda
 
 ## Règle de confirmation
 Avant toute action irréversible (envoyer un email) :
@@ -51,15 +58,16 @@ Avant toute action irréversible (envoyer un email) :
 Exception : lire, lister, résumer, créer un rappel, créer un événement agenda, mémoriser → agis directement sans demander.
 
 ## Capacités
-- Lire et analyser Gmail et Outlook
+- Inbox Outlook temps réel (lire_inbox_outlook)
+- Analyse complète Gmail et Outlook avec IA (analyser_emails_gmail, analyser_emails_outlook)
+- Agenda Google Calendar — lire et créer (lire_agenda, creer_evenement_agenda)
 - Morning briefing : météo + emails prioritaires + agenda du jour
 - Analyse de notes → plan d'action
 - Mémoire persistante : projets, préférences, tâches
-- Rappels avec notification email
 - Brouillons Gmail, envoi Outlook
 
 ## Style vocal
-- Tutoie Abo, sois concis (2-3 phrases max pour la voix)
+- Tutoie {name}, sois concis (2-3 phrases max pour la voix)
 - Réponds avec les vraies données — n'invente jamais un contenu d'email
 - Pour les réponses longues (liste d'emails) : résume à l'oral, détaille dans le chat"""
 
@@ -72,11 +80,11 @@ JARVIS_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "classifier_emails_gmail",
+            "name": "analyser_emails_gmail",
             "description": (
-                "Lire et analyser les emails Gmail non lus des 8 dernières heures avec l'IA. "
-                "À utiliser quand l'utilisateur veut voir/vérifier/analyser ses emails Gmail, "
-                "demande un résumé, ou dit des choses comme 't'as des mails ?', 'quoi de neuf dans ma boîte ?'."
+                "Lancer une analyse complète IA des emails Gmail non lus des 8 dernières heures. "
+                "À utiliser UNIQUEMENT pour une analyse avec priorités : 'analyse mes emails Gmail', "
+                "'classe mes mails Gmail', 'résumé Gmail'. Lourd — ne pas appeler juste pour lire."
             ),
             "parameters": {
                 "type": "object",
@@ -89,11 +97,11 @@ JARVIS_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "classifier_emails_outlook",
+            "name": "analyser_emails_outlook",
             "description": (
-                "Lire et analyser les emails Outlook récents. "
-                "À utiliser quand l'utilisateur mentionne Outlook, ses emails pro/avocat, "
-                "ou demande à voir sa boîte Outlook."
+                "Lancer une analyse complète IA des emails Outlook récents avec priorités. "
+                "À utiliser UNIQUEMENT pour : 'analyse mes emails Outlook', 'classe mes mails Outlook'. "
+                "Pour voir les emails rapidement, utiliser lire_inbox_outlook."
             ),
             "parameters": {
                 "type": "object",
@@ -106,11 +114,12 @@ JARVIS_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "lire_emails_en_memoire",
+            "name": "consulter_derniere_analyse",
             "description": (
-                "Consulter les emails déjà analysés et stockés en mémoire sans refaire une classification. "
-                "À utiliser pour répondre aux questions : 'qui m'a écrit ?', 'c'est quoi les urgents ?', "
-                "'liste mes derniers mails', 'qu'est-ce que Jean m'a envoyé ?'."
+                "Lire la dernière analyse d'emails stockée en mémoire (Gmail et/ou Outlook). "
+                "Rapide — pas d'appel réseau. Affiche le timestamp de la dernière analyse. "
+                "À utiliser pour : 'qui m'a écrit ?', 'les urgents ?', 'mes derniers mails analysés', "
+                "'qu'est-ce que Jean m'a envoyé ?'."
             ),
             "parameters": {
                 "type": "object",
@@ -119,6 +128,44 @@ JARVIS_TOOLS = [
                         "type": "string",
                         "enum": ["gmail", "outlook", "tous"],
                         "description": "Source à consulter (défaut: tous)",
+                    }
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lire_inbox_outlook",
+            "description": (
+                "Lire les emails actuels de la boîte Outlook en temps réel (données fraîches, cache 2 min). "
+                "À utiliser pour : 'donne-moi mes mails Outlook', 'j'ai des messages ?', "
+                "'quoi de neuf dans Outlook ?', 'mes emails du jour'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Nombre max d'emails (défaut 10, max 20)"}
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lire_agenda",
+            "description": (
+                "Lire les événements Google Calendar du jour, demain ou de la semaine. "
+                "À utiliser pour : 'qu'est-ce que j'ai aujourd'hui ?', 'mes RDV de la semaine', "
+                "'mon agenda', 'qu'est-ce que j'ai demain ?'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "periode": {
+                        "type": "string",
+                        "enum": ["aujourd'hui", "demain", "semaine"],
+                        "description": "Période à consulter (défaut: aujourd'hui)",
                     }
                 },
             },

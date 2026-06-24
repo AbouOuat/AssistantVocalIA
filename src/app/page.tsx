@@ -8,6 +8,7 @@ import { Waveform } from "@/components/Waveform";
 import { LiveTranscript } from "@/components/LiveTranscript";
 import { Chat } from "@/components/Chat";
 import { QuickActions } from "@/components/QuickActions";
+import { WorkflowVersion } from "@/components/WorkflowVersion";
 import { jarvisWS, BACKEND_HTTP_URL } from "@/lib/websocket";
 import { jarvisRT } from "@/lib/realtime";
 import type { RTEvent } from "@/lib/realtime";
@@ -306,12 +307,15 @@ export default function Home() {
       {/* Header */}
       <header className="w-full max-w-2xl flex items-center justify-between px-4 py-4">
         <h1 className="text-ink font-semibold text-[18px]">Jarvis</h1>
-        <span
-          data-testid="connection-status"
-          className={`text-[12px] font-mono ${connected ? "text-[#34D399]" : "text-muted"}`}
-        >
-          {connected ? "● Connected" : "○ Disconnected"}
-        </span>
+        <div className="flex items-center gap-3">
+          <WorkflowVersion />
+          <span
+            data-testid="connection-status"
+            className={`text-[12px] font-mono ${connected ? "text-[#34D399]" : "text-muted"}`}
+          >
+            {connected ? "● Connected" : "○ Disconnected"}
+          </span>
+        </div>
       </header>
 
       {/* Zone orb + waveform */}

@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "calendar-create-event",
+        "path": "google-calendar-create-event",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -13,7 +13,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [-400, 280],
-      "webhookId": "calendar-create-event"
+      "webhookId": "google-calendar-create-event"
     },
     {
       "parameters": {
@@ -55,7 +55,7 @@
     },
     {
       "parameters": {
-        "calendar": { "__rl": true, "value": "primary", "mode": "id" },
+        "calendar": { "__rl": true, "value": "={{ $env.CLIENT_CALENDAR_ID }}", "mode": "id" },
         "start": "={{ $('Valider paramètres').first().json.debut }}",
         "end": "={{ $('Valider paramètres').first().json.fin }}",
         "additionalFields": {

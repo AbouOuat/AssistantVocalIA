@@ -1,0 +1,206 @@
+{
+  "name": "[DEV] Gmail Email Classifier V2",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-gv2-001",
+      "name": "Démarrage manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-400, 100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8,12,18 * * 1-5" }]
+        }
+      },
+      "id": "schedule-gv2-002",
+      "name": "Planification 8h 12h 18h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [-400, 280]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-classifier-v2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-gv2-003",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-400, 460],
+      "webhookId": "email-classifier-v2"
+    },
+    {
+      "parameters": {
+        "jsCode": "let limit = 10;\nlet summaryRecipient = (typeof process !== 'undefined' && process.env?.CLIENT_GMAIL) || 'ouat.abou34@gmail.com';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) {}\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+      },
+      "id": "cfg-gv2-004",
+      "name": "Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 280]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ $('Configuration').first().json.maxEmails }}",
+        "filters": { "q": "is:unread newer_than:8h" }
+      },
+      "id": "gmail-gv2-005",
+      "name": "Gmail - Lire emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [80, 280],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuration').first().json;\nconst items = $input.all();\n// Guard : alwaysOutputData renvoie {} si 0 email — détecter l'item vide\nif (items.length === 1 && !items[0].json.id && !items[0].json.payload) {\n  return [{ json: { emails: [], skipped: [], no_emails: true, runAt: new Date().toISOString() } }];\n}\nconst excludedSenders = ['no-reply','noreply','newsletter','notification','notifications','marketing','facebookmail','linkedin'];\nconst excludedSubjects = ['newsletter','désabonnement','desabonnement','promotion','notification automatique','absence du bureau','automatic reply'];\nconst cutoff = new Date(Date.now() - Number(cfg.lookbackHours || 8) * 3600 * 1000);\nconst prepared = [];\nconst skipped = [];\nfor (const item of items) {\n  const m = item.json;\n  if (m.error) { skipped.push({ reason: 'erreur_lecture' }); continue; }\n  const headers = m.payload?.headers || [];\n  const from = headers.find(h => h.name === 'From')?.value || '';\n  const subject = headers.find(h => h.name === 'Subject')?.value || '(sans objet)';\n  const date = headers.find(h => h.name === 'Date')?.value || '';\n  const senderLow = from.toLowerCase();\n  const subjLow = subject.toLowerCase();\n  const receivedAt = date ? new Date(date) : new Date();\n  if (excludedSenders.some(x => senderLow.includes(x))) { skipped.push({ subject, reason: 'expediteur_exclu' }); continue; }\n  if (excludedSubjects.some(x => subjLow.includes(x))) { skipped.push({ subject, reason: 'objet_exclu' }); continue; }\n  if (receivedAt < cutoff) { skipped.push({ subject, reason: 'trop_ancien' }); continue; }\n  prepared.push({ id: m.id, subject, sender: from, snippet: (m.snippet || '').substring(0, 500) });\n}\nif (prepared.length === 0) {\n  return [{ json: { emails: [], skipped, no_emails: true, runAt: new Date().toISOString() } }];\n}\nreturn [{ json: { emails: prepared, skipped, no_emails: false, runAt: new Date().toISOString() } }];"
+      },
+      "id": "prep-gv2-006",
+      "name": "Préparer emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 280],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.no_emails }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-gv2-007",
+      "name": "Emails présents ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [560, 280]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, no_emails: true, processed: 0, skipped: $('Préparer emails').first().json.skipped.length, workflow_version: 'v2' }) }}"
+      },
+      "id": "resp-empty-gv2-008",
+      "name": "Répondre - Aucun email",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [800, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construit le prompt complet pour le LLM Chain\nconst emails = $('Préparer emails').first().json.emails || [];\nconst systemPrompt = `Tu classes des emails. Réponds uniquement en JSON valide (pas de markdown). Champs attendus: emails (array), global_summary (string max 5 lignes). Par email: id, urgence=haute|moyenne|faible, action=repondre|lire|relancer|classer|aucune, echeance_detectee=true|false, date_echeance=YYYY-MM-DD ou null, resume=une phrase, raison_urgence=une phrase ou vide. Critères urgence: date limite, convocation, délai, assignation, jugement, relance.`;\nconst userPrompt = 'Classe ces emails:\\n\\n' + JSON.stringify(emails);\nreturn [{ json: { ...$('Préparer emails').first().json, classificationPrompt: `${systemPrompt}\\n\\n${userPrompt}` } }];"
+      },
+      "id": "prompt-gv2-009",
+      "name": "Construire prompt LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 460]
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.classificationPrompt }}"
+      },
+      "id": "llm-chain-gv2-010",
+      "name": "Classification LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [1040, 460]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.1,
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "openai-gv2-011",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1040, 660],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_OPENAI_API_CREDENTIAL",
+          "name": "OpenAI Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Adapté pour chainLlm : sortie dans $json.text (pas choices[0].message.content)\nconst source = $('Préparer emails').first().json;\nconst raw = $input.first().json.text || '{}';\nlet parsed;\ntry {\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(match ? match[0] : raw);\n} catch(e) {\n  parsed = { emails: [], global_summary: 'Erreur parsing réponse IA V2.' };\n}\nconst analyses = parsed.emails || [];\nconst urgent = analyses.filter(x => x.urgence === 'haute');\nconst repondre = analyses.filter(x => x.action === 'repondre');\nconst echeances = analyses.filter(x => x.echeance_detectee);\nfunction line(x) {\n  const senderShort = (x.sender || '').split('<')[0].trim() || 'Inconnu';\n  return `• ${senderShort} | ${x.subject || '(sans objet)'} | ${x.resume || ''}${x.raison_urgence ? ' — ' + x.raison_urgence : ''}`;\n}\nconst summaryText = [\n  `🤖 Synthèse Gmail V2 (LangChain) — ${new Date().toLocaleString('fr-FR')}`,\n  `Analysés: ${analyses.length} | Ignorés: ${(source.skipped || []).length}`,\n  '',\n  '🚨 Urgents',\n  urgent.length ? urgent.map(line).join('\\n') : '• Aucun.',\n  '',\n  '📩 À répondre',\n  repondre.length ? repondre.map(line).join('\\n') : '• Aucun.',\n  '',\n  '📅 Échéances',\n  echeances.length ? echeances.map(x => `• ${x.date_echeance || 'date?'} | ${x.subject || ''} | ${x.resume || ''}`).join('\\n') : '• Aucune.',\n  '',\n  '📋 Synthèse',\n  parsed.global_summary || '• Rien à signaler.'\n].join('\\n');\nconst emailMap = {};\nfor (const e of (source.emails || [])) emailMap[e.id] = e;\nconst emails_structured = analyses.map(a => {\n  const orig = emailMap[a.id] || {};\n  const fromStr = orig.sender || '';\n  const m = fromStr.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: a.id,\n    from: fromStr,\n    from_name: (m?.[1] || fromStr).trim(),\n    from_email: m?.[2] || fromStr,\n    subject: orig.subject || '(sans objet)',\n    snippet: orig.snippet || '',\n    urgence: a.urgence || 'faible',\n    action: a.action || 'lire',\n    resume: a.resume || '',\n    echeance: a.echeance_detectee ? (a.date_echeance || null) : null,\n    source: 'gmail'\n  };\n});\nreturn [{ json: { summaryText, processedCount: analyses.length, skippedCount: (source.skipped || []).length, emails_structured } }];"
+      },
+      "id": "parse-gv2-012",
+      "name": "Parser et formater",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 460],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Configuration').first().json.summaryRecipient }}",
+        "subject": "🤖 Synthèse emails Gmail V2 (LangChain) — Jarvis",
+        "emailType": "text",
+        "message": "={{ $json.summaryText }}",
+        "options": {}
+      },
+      "id": "send-gv2-013",
+      "name": "Gmail - Envoyer synthèse",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1520, 340],
+      "continueOnFail": true,
+      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, no_emails: false, processed: $('Parser et formater').first().json.processedCount, skipped: $('Parser et formater').first().json.skippedCount, summary: $('Parser et formater').first().json.summaryText, summary_sent_to: $('Configuration').first().json.summaryRecipient, emails_structured: $('Parser et formater').first().json.emails_structured, workflow_version: 'v2' }) }}"
+      },
+      "id": "respond-gv2-014",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1520, 540]
+    }
+  ],
+  "connections": {
+    "Démarrage manuel":        { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
+    "Planification 8h 12h 18h":{ "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
+    "Webhook Jarvis":          { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
+    "Configuration":           { "main": [[{ "node": "Gmail - Lire emails",   "type": "main", "index": 0 }]] },
+    "Gmail - Lire emails":     { "main": [[{ "node": "Préparer emails",       "type": "main", "index": 0 }]] },
+    "Préparer emails":         { "main": [[{ "node": "Emails présents ?",     "type": "main", "index": 0 }]] },
+    "Emails présents ?": {
+      "main": [
+        [{ "node": "Répondre - Aucun email", "type": "main", "index": 0 }],
+        [{ "node": "Construire prompt LLM",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Construire prompt LLM":    { "main": [[{ "node": "Classification LLM Chain", "type": "main", "index": 0 }]] },
+    "OpenAI Chat Model":        { "ai_languageModel": [[{ "node": "Classification LLM Chain", "type": "ai_languageModel", "index": 0 }]] },
+    "Classification LLM Chain": { "main": [[{ "node": "Parser et formater",   "type": "main", "index": 0 }]] },
+    "Parser et formater": {
+      "main": [[
+        { "node": "Gmail - Envoyer synthèse", "type": "main", "index": 0 },
+        { "node": "Répondre Webhook",         "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "gmail", "langchain", "v2"]
+}

@@ -1,0 +1,89 @@
+{
+  "name": "[DEV] outlook-read-inbox",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "outlook-read-inbox",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-outlook-inbox-001",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "outlook-read-inbox"
+    },
+    {
+      "parameters": {
+        "jsCode": "let limit = 10;\ntry {\n  const bodyLimit = $input.first().json?.body?.limit;\n  if (bodyLimit !== undefined && bodyLimit !== null) {\n    const parsed = parseInt(String(bodyLimit), 10);\n    if (!isNaN(parsed)) limit = Math.max(1, Math.min(20, parsed));\n  }\n} catch(e) {}\nreturn [{ json: { limit } }];"
+      },
+      "id": "cfg-outlook-inbox-002",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "filters": {
+          "folderId": {
+            "__rl": true,
+            "value": "inbox",
+            "mode": "list",
+            "cachedResultName": "Inbox"
+          }
+        },
+        "returnAll": false,
+        "limit": "={{ $('Config').first().json.limit }}",
+        "additionalFields": {}
+      },
+      "id": "ms-outlook-inbox-003",
+      "name": "Outlook — Lire inbox",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "REPLACE_WITH_OUTLOOK_OAUTH2_CREDENTIAL",
+          "name": "Connect_Outlook_ouat_native"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n// Guard alwaysOutputData : item vide = aucun email dans l'inbox\nif (items.length === 1 && !items[0].json.id && !items[0].json.subject) {\n  return [{ json: { ok: true, emails: [], count: 0, fetched_at: new Date().toISOString() } }];\n}\n// Erreur noeud natif\nif (items.length === 1 && items[0].json.error) {\n  return [{ json: { ok: false, error: items[0].json.error.message || 'Outlook error', emails: [], count: 0, fetched_at: new Date().toISOString() } }];\n}\nconst emails = items.map(i => i.json);\nreturn [{ json: { ok: true, emails, count: emails.length, fetched_at: new Date().toISOString() } }];"
+      },
+      "id": "fmt-outlook-inbox-004",
+      "name": "Format réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "resp-outlook-inbox-005",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis":        { "main": [[{ "node": "Config",               "type": "main", "index": 0 }]] },
+    "Config":                { "main": [[{ "node": "Outlook — Lire inbox", "type": "main", "index": 0 }]] },
+    "Outlook — Lire inbox":  { "main": [[{ "node": "Format réponse",       "type": "main", "index": 0 }]] },
+    "Format réponse":        { "main": [[{ "node": "Répondre Webhook",     "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "outlook", "inbox"]
+}

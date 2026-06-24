@@ -1,0 +1,90 @@
+{
+  "name": "[DEV] google-calendar-read",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "google-calendar-read",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-gcal-read-001",
+      "name": "Webhook Jarvis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "google-calendar-read"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst periode = body.periode || \"aujourd'hui\";\nconst calendarId = body.calendar_id || (typeof process !== 'undefined' && process.env?.CLIENT_CALENDAR_ID) || 'primary';\n\nfunction startOfDay(d) { const s = new Date(d); s.setHours(0,0,0,0); return s; }\nfunction endOfDay(d)   { const e = new Date(d); e.setHours(23,59,59,999); return e; }\n\nconst now = new Date();\nlet timeMin, timeMax;\n\nif (periode === 'demain' || periode === 'tomorrow') {\n  const d = new Date(now); d.setDate(d.getDate() + 1);\n  timeMin = startOfDay(d); timeMax = endOfDay(d);\n} else if (periode === 'semaine' || periode === 'week') {\n  const day = now.getDay();\n  const monday = new Date(now); monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));\n  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);\n  timeMin = startOfDay(monday); timeMax = endOfDay(sunday);\n} else {\n  timeMin = startOfDay(now); timeMax = endOfDay(now);\n}\n\nreturn [{ json: { periode, calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() } }];"
+      },
+      "id": "cfg-gcal-read-002",
+      "name": "Calcul plage horaire",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendarId }}",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 20,
+        "additionalFields": {
+          "timeMin": "={{ $json.timeMin }}",
+          "timeMax": "={{ $json.timeMax }}",
+          "orderBy": "startTime",
+          "singleEvents": true
+        }
+      },
+      "id": "gcal-read-003",
+      "name": "Google Calendar — Lire événements",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.1,
+      "position": [680, 300],
+      "continueOnFail": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "gcalendar-creds",
+          "name": "Google Calendar Jarvis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst events = items.map(i => i.json).filter(e => e.id);\nconst periode = $('Calcul plage horaire').first().json.periode;\nreturn [{ json: { ok: true, periode, events, count: events.length, fetched_at: new Date().toISOString() } }];"
+      },
+      "id": "fmt-gcal-read-004",
+      "name": "Format réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "resp-gcal-read-005",
+      "name": "Répondre Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Jarvis":                    { "main": [[{ "node": "Calcul plage horaire",              "type": "main", "index": 0 }]] },
+    "Calcul plage horaire":              { "main": [[{ "node": "Google Calendar — Lire événements", "type": "main", "index": 0 }]] },
+    "Google Calendar — Lire événements": { "main": [[{ "node": "Format réponse",                   "type": "main", "index": 0 }]] },
+    "Format réponse":                    { "main": [[{ "node": "Répondre Webhook",                  "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["jarvis", "calendar", "google"]
+}

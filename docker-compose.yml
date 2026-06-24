@@ -40,6 +40,21 @@ services:
       N8N_API_URL: ${N8N_API_URL:-http://n8n:5678/api/v1}
       N8N_API_KEY: ${N8N_API_KEY:-}
       GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL:-}
+      # Profil client
+      CLIENT_NAME: ${CLIENT_NAME:-Abo}
+      CLIENT_TIMEZONE: ${CLIENT_TIMEZONE:-Europe/Paris}
+      CLIENT_LANGUAGE: ${CLIENT_LANGUAGE:-fr}
+      CLIENT_OUTLOOK_MAILBOX: ${CLIENT_OUTLOOK_MAILBOX:-}
+      CLIENT_SUMMARY_RECIPIENT: ${CLIENT_SUMMARY_RECIPIENT:-}
+      CLIENT_CR_RECIPIENT: ${CLIENT_CR_RECIPIENT:-}
+      CLIENT_GMAIL: ${CLIENT_GMAIL:-}
+      CLIENT_CALENDAR_ID: ${CLIENT_CALENDAR_ID:-primary}
+      CLIENT_URGENCY_KEYWORDS: ${CLIENT_URGENCY_KEYWORDS:-assignation,convocation,jugement,ordonnance,huissier,audience,appel,arrêt,décision,notification}
+      CLIENT_EXCLUDED_DOMAINS: ${CLIENT_EXCLUDED_DOMAINS:-substack.com,mailchimp.com,sendgrid.net,newsletter,noreply}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      EMAIL_ANALYSIS_CACHE_TTL: ${EMAIL_ANALYSIS_CACHE_TTL:-86400}
+      EMAIL_INBOX_CACHE_TTL: ${EMAIL_INBOX_CACHE_TTL:-120}
+      WORKFLOW_VERSION: ${WORKFLOW_VERSION:-v1}
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,7 +93,16 @@ services:
       N8N_USER_MANAGEMENT_JWT_SECRET: ${SECRET_KEY}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Variables client accessibles dans les Code nodes n8n via process.env
       SUMMARY_RECIPIENT_EMAIL: ${SUMMARY_RECIPIENT_EMAIL:-ouat.abou34@outlook.fr}
+      CLIENT_NAME: ${CLIENT_NAME:-Abo}
+      CLIENT_GMAIL: ${CLIENT_GMAIL:-ouat.abou34@gmail.com}
+      CLIENT_CALENDAR_ID: ${CLIENT_CALENDAR_ID:-ouat.abou34@gmail.com}
+      CLIENT_OUTLOOK_MAILBOX: ${CLIENT_OUTLOOK_MAILBOX:-ouat.abou34@outlook.fr}
+      CLIENT_SUMMARY_RECIPIENT: ${CLIENT_SUMMARY_RECIPIENT:-ouat.abou34@outlook.fr}
+      CLIENT_URGENCY_KEYWORDS: ${CLIENT_URGENCY_KEYWORDS:-assignation,convocation,jugement,ordonnance,huissier,audience,appel,arrêt,décision,notification}
+      CLIENT_EXCLUDED_DOMAINS: ${CLIENT_EXCLUDED_DOMAINS:-substack.com,mailchimp.com,sendgrid.net,newsletter,noreply}
+      WORKFLOW_VERSION: ${WORKFLOW_VERSION:-v1}
     ports:
       - "5678:5678"
     volumes:

@@ -57,10 +57,10 @@
       "parameters": {
         "resource": "draft",
         "operation": "create",
-        "sendTo": "={{ $('Valider paramètres').first().json.to }}",
-        "subject": "={{ $('Valider paramètres').first().json.subject }}",
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
         "emailType": "text",
-        "message": "={{ $('Valider paramètres').first().json.bodyText }}",
+        "message": "={{ $json.bodyText }}",
         "options": {}
       },
       "id": "gmail-draft",

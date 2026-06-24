@@ -1,4 +1,4 @@
-﻿"""Jarvis Backend â€” FastAPI + WebSocket pipeline complet."""
+"""Jarvis Backend â€” FastAPI + WebSocket pipeline complet."""
 
 import asyncio
 import json
@@ -93,20 +93,20 @@ app.add_middleware(
 
 
 _TOOL_PROGRESS: dict[str, str] = {
-    "analyser_emails_gmail":      "ðŸ” Analyse complÃ¨te des emails Gmail...",
-    "analyser_emails_outlook":    "ðŸ” Analyse complÃ¨te des emails Outlook...",
-    "consulter_derniere_analyse": "ðŸ“¬ Consultation de la derniÃ¨re analyse...",
-    "lire_inbox_outlook":         "ðŸ“¥ Lecture de la boÃ®te Outlook en temps rÃ©el...",
-    "lire_agenda":                "ðŸ“… Lecture de l'agenda Google Calendar...",
-    "morning_briefing":           "ðŸŒ… PrÃ©paration du briefing du matin...",
-    "creer_rappel":               "ðŸ“ CrÃ©ation du rappel...",
-    "rechercher_emails":          "ðŸ” Recherche dans Gmail et Outlook...",
-    "creer_evenement_agenda":     "ðŸ“… Ajout dans Google Calendar...",
-    "creer_brouillon_gmail":      "âœï¸ CrÃ©ation du brouillon Gmail...",
-    "envoyer_email_outlook":      "ðŸ“¤ Envoi de l'email via Outlook...",
-    "analyser_notes":             "ðŸ¤– Analyse des notes et crÃ©ation du plan d'action...",
-    "rechercher_memoire":         "ðŸ§  Recherche en mÃ©moire...",
-    "sauvegarder_memoire":        "ðŸ’¾ MÃ©morisation en cours...",
+    "analyser_emails_gmail":      "Analyse des emails Gmail...",
+    "analyser_emails_outlook":    "Analyse des emails Outlook...",
+    "consulter_derniere_analyse": "Consultation de la derniere analyse...",
+    "lire_inbox_outlook":         "Lecture de la boite Outlook en temps reel...",
+    "lire_agenda":                "Lecture de l'agenda Google Calendar...",
+    "morning_briefing":           "Preparation du briefing du matin...",
+    "creer_rappel":               "Creation du rappel...",
+    "rechercher_emails":          "Recherche dans Gmail et Outlook...",
+    "creer_evenement_agenda":     "Ajout dans Google Calendar...",
+    "creer_brouillon_gmail":      "Creation du brouillon Gmail...",
+    "envoyer_email_outlook":      "Envoi de l'email via Outlook...",
+    "analyser_notes":             "Analyse des notes et creation du plan d'action...",
+    "rechercher_memoire":         "Recherche en memoire...",
+    "sauvegarder_memoire":        "Memorisation en cours...",
 }
 
 def _format_emails_context(source: str, emails: list) -> str:

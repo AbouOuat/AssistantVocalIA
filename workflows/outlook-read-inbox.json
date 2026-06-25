@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "let limit = 10;\ntry {\n  const bodyLimit = $input.first().json?.body?.limit;\n  if (bodyLimit !== undefined && bodyLimit !== null) {\n    const parsed = parseInt(String(bodyLimit), 10);\n    if (!isNaN(parsed)) limit = Math.max(1, Math.min(20, parsed));\n  }\n} catch(e) {}\nreturn [{ json: { limit } }];"
+        "jsCode": "const body = $input.first().json?.body || {};\nlet limit = 10;\ntry {\n  if (body.limit !== undefined && body.limit !== null) {\n    const parsed = parseInt(String(body.limit), 10);\n    if (!isNaN(parsed)) limit = Math.max(1, Math.min(20, parsed));\n  }\n} catch(e) {}\nconst VALID_FOLDERS = ['inbox', 'junkemail', 'deleteditems', 'sentItems', 'drafts', 'archive'];\nconst rawFolder = String(body.folder || 'inbox').trim();\nconst folder = VALID_FOLDERS.includes(rawFolder) ? rawFolder : 'inbox';\nreturn [{ json: { limit, folder } }];"
       },
       "id": "cfg-outlook-inbox-002",
       "name": "Config",
@@ -32,9 +32,8 @@
         "filters": {
           "folderId": {
             "__rl": true,
-            "value": "inbox",
-            "mode": "list",
-            "cachedResultName": "Inbox"
+            "value": "={{ $('Config').first().json.folder }}",
+            "mode": "id"
           }
         },
         "returnAll": false,

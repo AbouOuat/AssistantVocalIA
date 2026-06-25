@@ -190,7 +190,8 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
 
     if name == "lire_inbox_outlook":
         limit = min(int(args.get("limit", 10)), 20)
-        result = await call_webhook("outlook-read-inbox", {"limit": limit})
+        dossier = args.get("dossier", "inbox").strip() or "inbox"
+        result = await call_webhook("outlook-read-inbox", {"limit": limit, "folder": dossier})
         if not result or not result.get("ok"):
             return "Impossible de lire la boÃ®te Outlook. VÃ©rifie que le workflow outlook-read-inbox est actif."
         emails = result.get("emails", [])
@@ -200,7 +201,9 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
             user_id, "context", "inbox_outlook_live", emails,
             ttl_seconds=settings.EMAIL_INBOX_CACHE_TTL,
         )
-        lines = [f"## BoÃ®te Outlook â€” {len(emails)} emails rÃ©cents (Ã  {result.get('fetched_at', '')[:16]})"]
+        _folder_labels = {"inbox": "Boite de reception", "junkemail": "Spam", "deleteditems": "Supprimes", "sentItems": "Envoyes", "drafts": "Brouillons", "archive": "Archive"}
+        folder_label = _folder_labels.get(dossier, dossier)
+        lines = [f"## Outlook ({folder_label}) — {len(emails)} emails recents"]
         for e in emails[:10]:
             preview = f" | {e.get('bodyPreview', '')[:80]}" if e.get("bodyPreview") else ""
             # Le noeud natif microsoftOutlook renvoie `from` comme string ou dict Graph API

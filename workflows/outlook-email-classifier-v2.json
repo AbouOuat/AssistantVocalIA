@@ -53,8 +53,7 @@
           "folderId": {
             "__rl": true,
             "value": "inbox",
-            "mode": "list",
-            "cachedResultName": "Inbox"
+            "mode": "id"
           }
         },
         "returnAll": false,

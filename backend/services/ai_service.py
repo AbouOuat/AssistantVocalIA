@@ -45,7 +45,8 @@ def _build_system_prompt() -> str:
 - Pour une analyse IA complète Gmail → analyser_emails_gmail (classe par priorité, lourd)
 - Pour une analyse IA complète Outlook → analyser_emails_outlook (classe par priorité, lourd)
 - Pour relire une analyse déjà faite → consulter_derniere_analyse (depuis mémoire, rapide)
-- Si l'utilisateur demande "mes mails" sans préciser → consulter_derniere_analyse d'abord, sinon lire_inbox_outlook
+- Si l'utilisateur demande "mes mails" / "mes emails" sans préciser → lire_inbox_outlook directement (données fraîches)
+- N'utilise consulter_derniere_analyse QUE si l'utilisateur dit explicitement "rappelle-moi l'analyse", "ce qu'on avait vu", "la dernière analyse faite"
 - Ne jamais dire "je n'ai pas accès" sans avoir appelé un outil d'abord
 
 ## Agenda
@@ -140,14 +141,24 @@ JARVIS_TOOLS = [
         "function": {
             "name": "lire_inbox_outlook",
             "description": (
-                "Lire les emails actuels de la boîte Outlook en temps réel (données fraîches, cache 2 min). "
-                "À utiliser pour : 'donne-moi mes mails Outlook', 'j'ai des messages ?', "
-                "'quoi de neuf dans Outlook ?', 'mes emails du jour'."
+                "Lire les emails actuels d'un dossier Outlook en temps réel (données fraîches, cache 2 min). "
+                "À utiliser pour : 'donne-moi mes mails', 'j'ai des messages ?', "
+                "'mes emails du jour', 'mes mails dans le spam', 'qu'est-ce que j'ai dans les supprimés ?'."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "limit": {"type": "integer", "description": "Nombre max d'emails (défaut 10, max 20)"}
+                    "limit": {"type": "integer", "description": "Nombre max d'emails (défaut 10, max 20)"},
+                    "dossier": {
+                        "type": "string",
+                        "description": (
+                            "Dossier Outlook à lire. Déduis depuis la demande. "
+                            "Valeurs : inbox (défaut/boite de reception), "
+                            "junkemail (spam/courrier indésirable), "
+                            "deleteditems (supprimés/corbeille), "
+                            "sentItems (envoyés), drafts (brouillons), archive."
+                        ),
+                    },
                 },
             },
         },

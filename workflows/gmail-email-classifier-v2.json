@@ -12,11 +12,11 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 8,12,18 * * 1-5" }]
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1" }]
         }
       },
       "id": "schedule-gv2-002",
-      "name": "Planification 8h 12h 18h",
+      "name": "Planification 8h Lundi",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [-400, 280]
@@ -179,7 +179,7 @@
   ],
   "connections": {
     "Démarrage manuel":        { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
-    "Planification 8h 12h 18h":{ "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
+    "Planification 8h Lundi":   { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
     "Webhook Jarvis":          { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
     "Configuration":           { "main": [[{ "node": "Gmail - Lire emails",   "type": "main", "index": 0 }]] },
     "Gmail - Lire emails":     { "main": [[{ "node": "Préparer emails",       "type": "main", "index": 0 }]] },

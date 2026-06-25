@@ -218,31 +218,30 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         return "\n".join(lines)
 
     if name == "lire_agenda":
-        periode = args.get("periode", "aujourd'hui")
-        result = await call_webhook("google-calendar-read", {"periode": periode, "calendar_id": settings.CLIENT_CALENDAR_ID})
+        from datetime import date as _date
+        date_debut = args.get("date_debut", _date.today().isoformat())
+        date_fin = args.get("date_fin", date_debut)
+        result = await call_webhook("google-calendar-read", {
+            "date_debut": date_debut,
+            "date_fin": date_fin,
+            "calendar_id": settings.CLIENT_CALENDAR_ID,
+        })
         if not result or not result.get("ok"):
-            return "Impossible de lire l'agenda. VÃ©rifie que le workflow google-calendar-read est actif."
+            return "Impossible de lire l'agenda. Verifie que le workflow google-calendar-read est actif."
         events = result.get("events", [])
         if not events:
-            return f"Aucun Ã©vÃ©nement trouvÃ© pour {periode}."
-        lines = [f"## Agenda â€” {periode} ({len(events)} Ã©vÃ©nement(s))"]
+            return f"Aucun evenement du {date_debut} au {date_fin}."
+        curated = []
         for e in events:
-            start = e.get("start", {})
-            debut_raw = start.get("dateTime", start.get("date", "?"))
-            try:
-                debut_str = datetime.fromisoformat(debut_raw.replace("Z", "+00:00")).strftime("%Hh%M")
-            except Exception:
-                debut_str = debut_raw
-            end = e.get("end", {})
-            fin_raw = end.get("dateTime", end.get("date", ""))
-            try:
-                fin_str = f"-{datetime.fromisoformat(fin_raw.replace('Z', '+00:00')).strftime('%Hh%M')}" if fin_raw else ""
-            except Exception:
-                fin_str = ""
-            lieu = f" | {e.get('location', '')}" if e.get("location") else ""
-            lines.append(f"- {debut_str}{fin_str} : {e.get('summary', '?')}{lieu}")
-        return "\n".join(lines)
-
+            start_e = e.get("start", {})
+            end_e = e.get("end", {})
+            curated.append({
+                "summary": e.get("summary", "?"),
+                "start": start_e.get("dateTime", start_e.get("date", "?")),
+                "end": end_e.get("dateTime", end_e.get("date", "")),
+                "location": e.get("location", ""),
+            })
+        return json.dumps({"events": curated, "date_debut": date_debut, "date_fin": date_fin}, ensure_ascii=False)
     if name == "morning_briefing":
         result = await call_webhook("morning-briefing", {"user_id": user_id})
         if not result:

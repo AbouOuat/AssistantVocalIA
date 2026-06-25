@@ -49,7 +49,9 @@ def _build_system_prompt() -> str:
 - Ne jamais dire "je n'ai pas accès" sans avoir appelé un outil d'abord
 
 ## Agenda
-- Pour lire l'agenda → lire_agenda (paramètre : aujourd'hui / demain / semaine)
+- Pour lire l'agenda → lire_agenda(date_debut, date_fin) — calcule les dates ISO toi-même depuis la date du jour
+- Exemples : "aujourd'hui" → date_debut=date du jour, date_fin=date du jour
+             "demain" → +1 jour, "cette semaine" → lundi→dimanche, "après jeudi" → vendredi→dimanche
 - Pour créer un événement → creer_evenement_agenda
 
 ## Règle de confirmation
@@ -155,19 +157,26 @@ JARVIS_TOOLS = [
         "function": {
             "name": "lire_agenda",
             "description": (
-                "Lire les événements Google Calendar du jour, demain ou de la semaine. "
+                "Lire les événements Google Calendar sur une plage de dates. "
                 "À utiliser pour : 'qu'est-ce que j'ai aujourd'hui ?', 'mes RDV de la semaine', "
-                "'mon agenda', 'qu'est-ce que j'ai demain ?'."
+                "'mon agenda', 'qu'est-ce que j'ai demain ?', 'mes RDV après jeudi', "
+                "'dans deux jours', 'ce week-end', etc. "
+                "Calcule toi-même date_debut et date_fin au format YYYY-MM-DD "
+                "en te basant sur la date du jour fournie dans le system prompt."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "periode": {
+                    "date_debut": {
                         "type": "string",
-                        "enum": ["aujourd'hui", "demain", "semaine"],
-                        "description": "Période à consulter (défaut: aujourd'hui)",
-                    }
+                        "description": "Date de début au format YYYY-MM-DD (ex: aujourd'hui = date du jour)",
+                    },
+                    "date_fin": {
+                        "type": "string",
+                        "description": "Date de fin au format YYYY-MM-DD (incluse). Même valeur que date_debut pour un seul jour.",
+                    },
                 },
+                "required": ["date_debut", "date_fin"],
             },
         },
     },

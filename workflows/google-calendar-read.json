@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst periode = body.periode || \"aujourd'hui\";\nconst calendarId = body.calendar_id || (typeof process !== 'undefined' && process.env?.CLIENT_CALENDAR_ID) || 'primary';\n\nfunction startOfDay(d) { const s = new Date(d); s.setHours(0,0,0,0); return s; }\nfunction endOfDay(d)   { const e = new Date(d); e.setHours(23,59,59,999); return e; }\n\nconst now = new Date();\nlet timeMin, timeMax;\n\nif (periode === 'demain' || periode === 'tomorrow') {\n  const d = new Date(now); d.setDate(d.getDate() + 1);\n  timeMin = startOfDay(d); timeMax = endOfDay(d);\n} else if (periode === 'semaine' || periode === 'week') {\n  const day = now.getDay();\n  const monday = new Date(now); monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));\n  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);\n  timeMin = startOfDay(monday); timeMax = endOfDay(sunday);\n} else {\n  timeMin = startOfDay(now); timeMax = endOfDay(now);\n}\n\nreturn [{ json: { periode, calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() } }];"
+        "jsCode": "const body = $input.first().json.body || {};\nconst calendarId = body.calendar_id || (typeof process !== 'undefined' && process.env?.CLIENT_CALENDAR_ID) || 'primary';\n\n// date_debut et date_fin sont des YYYY-MM-DD calculés par le LLM\nconst dateDebut = body.date_debut || new Date().toISOString().slice(0, 10);\nconst dateFin   = body.date_fin   || dateDebut;\n\n// Minuit Paris = UTC-2 (été) → on ajoute T00:00:00+02:00 / T23:59:59+02:00\nconst timeMin = dateDebut + 'T00:00:00+02:00';\nconst timeMax = dateFin   + 'T23:59:59+02:00';\n\nreturn [{ json: { dateDebut, dateFin, calendarId, timeMin, timeMax } }];"
       },
       "id": "cfg-gcal-read-002",
       "name": "Calcul plage horaire",
@@ -58,7 +58,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst events = items.map(i => i.json).filter(e => e.id);\nconst periode = $('Calcul plage horaire').first().json.periode;\nreturn [{ json: { ok: true, periode, events, count: events.length, fetched_at: new Date().toISOString() } }];"
+        "jsCode": "const items = $input.all();\nconst cfg = $('Calcul plage horaire').first().json;\nconst timeMin = new Date(cfg.timeMin);\nconst timeMax = new Date(cfg.timeMax);\n\n// Filtre JS : garde uniquement les events dans la plage (Bug A — filtre n8n parfois ignoré)\nconst events = items\n  .map(i => i.json)\n  .filter(e => {\n    if (!e.id) return false;\n    const start = new Date(e.start?.dateTime || e.start?.date);\n    return start >= timeMin && start <= timeMax;\n  });\n\nreturn [{ json: { ok: true, date_debut: cfg.dateDebut, date_fin: cfg.dateFin, events, count: events.length, fetched_at: new Date().toISOString() } }];"
       },
       "id": "fmt-gcal-read-004",
       "name": "Format réponse",

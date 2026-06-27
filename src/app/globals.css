@@ -27,6 +27,15 @@ body {
 ::-webkit-scrollbar {
   width: 4px;
 }
+
+/* Masquer la scrollbar sur les éléments avec scrollbar-none */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 ::-webkit-scrollbar-track {
   background: #0F172A;
 }

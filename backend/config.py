@@ -71,7 +71,7 @@ class Settings:
     EMAIL_INBOX_CACHE_TTL: int = int(os.getenv("EMAIL_INBOX_CACHE_TTL", "120"))
 
     # Version workflows n8n — v1 = custom JS, v2 = LangChain natif
-    WORKFLOW_VERSION: str = os.getenv("WORKFLOW_VERSION", "v1")
+    WORKFLOW_VERSION: str = os.getenv("WORKFLOW_VERSION", "v2")
 
 
 def get_settings() -> Settings:

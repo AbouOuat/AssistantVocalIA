@@ -246,7 +246,10 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
             })
         return json.dumps({"events": curated, "date_debut": date_debut, "date_fin": date_fin}, ensure_ascii=False)
     if name == "morning_briefing":
-        result = await call_webhook("morning-briefing", {"user_id": user_id})
+        result = await call_webhook("morning-briefing", {
+            "user_id": user_id,
+            "calendar_id": settings.CLIENT_CALENDAR_ID,
+        })
         if not result:
             return "Le workflow Morning Briefing est injoignable. VÃ©rifie qu'il est actif sur n8n."
         return result.get("briefing", "Briefing reÃ§u.")

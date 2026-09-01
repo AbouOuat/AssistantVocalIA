@@ -3,6 +3,20 @@
 > PRD parent : `PRD.md`
 > Date : 2026-05-28
 
+---
+
+> ⚠️ **DOCUMENT HISTORIQUE — NON MAINTENU (constat audit 2026-09-01).**
+> La V2 a été livrée en prod le 2026-06-03 et a largement dépassé ce plan.
+> Les cases ci-dessous sont figées au 2026-05-28 et ne reflètent plus la réalité :
+> - Tâche 4 (voix / accès Realtime API) : le pipeline voix tourne via Whisper + function calling ; le bridge OpenAI Realtime est codé (`backend/services/realtime_service.py`, `/ws/realtime`) mais désactivé par défaut (`REALTIME_ENABLED`).
+> - Tâche 8 (E2E vocal) : jamais automatisée — seuls `tests/e2e/voice-connection.spec.ts` et `fallback.spec.ts` existent.
+> - « Critère de phase complète » : non coché mais fonctionnellement atteint (chat + voix + GPT-4o en prod).
+>
+> **Ne rien exécuter depuis ce fichier.** Travail courant = `DOCS/plans/refactoring-plan.md` (Phase D) + `STATUS.md`.
+> Ce plan sera acté « historique » lors du prochain `/close`.
+
+---
+
 ## Tâches
 
 - [x] **1. Réorganiser backend** — Créer `backend/services/`, déplacer les 6
@@ -77,4 +91,5 @@
 
 ## Prochaine étape
 
-`/execute docs/plans/phase-1-plan.md`
+~~`/execute docs/plans/phase-1-plan.md`~~ — obsolète (voir bandeau en tête).
+Travail courant : `DOCS/plans/refactoring-plan.md` (Phase D) après vérification REPO ↔ n8n PROD.

@@ -68,10 +68,8 @@ pour un hackathon (contrainte : au moins un service Hostinger actif).
 ## 7. Implementation Phases
 
 - **V1 (scaffoldée 2026-05-19)** — FastAPI + React/Vite, 7 services Python, non connectés
-- **V2 (en cours)** — Next.js + Realtime API + 3 démos + Redis Named Scopes + Hostinger
-  - Phase 1 — Foundation (Jour 1) : scaffold Next.js + Realtime API WS + backend connecté
-  - Phase 2 — Features (Jour 2) : 3 démos end-to-end + Named Scopes + VAD + n8n
-  - Phase 3 — Ship (Jours 3-4) : deploy Hostinger + UI polish + Playwright + fallbacks
+- **V2 (livrée le 2026-06-03)** — Next.js + 3 démos + Redis Named Scopes + n8n, déployée prod Hostinger VPS / Coolify (`jarvis.obyz.biz`). Voix = pipeline Whisper + function calling (bridge OpenAI Realtime codé mais désactivé via `REALTIME_ENABLED`). Plans Phase 1/2/3 : `DOCS/plans/phase-1-plan.md` (historique, non maintenu).
+- **Refactoring Intent Router (en cours — audit 2026-06-23)** — profil client centralisé (`CLIENT_*`) + outils LLM redéfinis + workflows n8n manquants. A/B/C livrés (commit `6c0d30d`), D (import prod + tests) partiel. Détail : `DOCS/plans/refactoring-plan.md`.
 - **V3 (envisagé)** — SaaS multi-user, auth, wake word, modèle commercial
 
 ## 8. Risks & Mitigations

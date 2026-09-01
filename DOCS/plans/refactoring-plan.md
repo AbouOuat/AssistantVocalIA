@@ -4,6 +4,21 @@
 
 ---
 
+## Statut (audit de reprise 2026-09-01)
+
+| Phase | État | Preuve |
+|---|---|---|
+| **A** — config client centralisée + nettoyage | ✅ Fait | `backend/config.py:39-74` (bloc `CLIENT_*`), `.env.example:27-48`, `docker-compose.yml` (CLIENT_* → backend + n8n), commit `6c0d30d` ("suppression `_handle_n8n_command_legacy` (312 lignes)"), `main.py:324` webhook `google-calendar-create-event` |
+| **B** — outils LLM (intent router = function calling OpenAI) | ✅ Fait | `ai_service.py` `JARVIS_TOOLS` : `analyser_emails_gmail/outlook`, `consulter_derniere_analyse`, `lire_inbox_outlook` (param `dossier`), `lire_agenda` (dates ISO libres, cf. commit `8245cc0`), `_build_system_prompt()` client-aware. 15 tools au total. |
+| **C** — workflows n8n manquants | ✅ Fait côté repo | `workflows/outlook-read-inbox.json`, `workflows/google-calendar-read.json`, `workflows/gmail-email-classifier-v2.json`, `workflows/outlook-email-classifier-v2.json` (commit `6c0d30d`). Présence/activation dans l'instance n8n prod **non vérifiée**. |
+| **D** — import prod + tests | 🟡 Partiel | Rapport `DOCS/reports/tests-jarvis-2026-06-27.md` (13 tests prod, 9 OK / 2 partiels / 2 KO). Actifs prod : `outlook-read-inbox`, `outlook-email-classifier-v2`, `google-calendar-read`/`-create-event`, `gmail-draft`, `reminders`, mémoire Redis. **KO/suspects** : `morning-briefing` (webhook injoignable — TEST-01), Gmail `email-classifier-v2` (inactif ? — TEST-05), `outlook-read-inbox` n'exploite pas le champ `folder` (TEST-03/04). Aucun E2E automatisé sur ces scénarios. |
+
+**Reste à faire (Phase D)** : voir la section « Phase D » plus bas + le tableau d'actions correctives du rapport de tests. Ne pas toucher la prod avant une vérification REPO ↔ n8n PROD.
+
+> Note : les évolutions post-plan `0df5182` (dossiers Outlook dynamiques) et `8245cc0` (agenda dates libres LLM) étendent B2/B3 au-delà de ce que décrit le plan d'origine ci-dessous.
+
+---
+
 ## Objectifs
 
 1. **Zéro valeur hardcodée** — toute adresse email, URL, TTL vient de config/env

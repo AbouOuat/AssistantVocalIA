@@ -195,23 +195,24 @@ Un RAG réel en prod substantie la compétence.
 
 ---
 
-## T3 — Alertes e-mail sur échec de workflow n8n  ⬜
+## T3 — Alertes e-mail sur échec de workflow n8n  🟡
 
 **Pourquoi** : clause CV « alertes automatiques par e-mail en cas d'échec d'un workflow ».
-Aujourd'hui : uniquement `continueOnFail: true` (dégradation), aucun Error Trigger dans le repo.
+Avant : uniquement `continueOnFail` (dégradation), aucun Error Trigger.
 
-**À faire**
-1. Créer `workflows/error-handler.json` : node **Error Trigger** → envoi e-mail (Graph API ou SMTP)
-   vers `CLIENT_CR_RECIPIENT`. Contenu : nom du workflow, node en échec, message d'erreur, timestamp,
-   lien vers l'exécution.
-2. Affecter ce workflow comme **Error Workflow** sur tous les workflows `[PROD]` actifs
-   (n8n : Settings → Error Workflow, par workflow).
-3. Optionnel : throttle 1 mail / workflow / 15 min via flag Redis.
-4. Versionner la procédure dans `DOCS/` (liste des workflows où l'Error Workflow est affecté).
+**Fait (2026-09-04)**
+- ✅ `workflows/error-handler.json` : `Error Trigger` → `Formater alerte` (Code) → `Gmail - Envoyer alerte`.
+  Destinataire via env uniquement (`CLIENT_CR_RECIPIENT` → `CLIENT_SUMMARY_RECIPIENT` → `SUMMARY_RECIPIENT_EMAIL`),
+  aucun défaut identifiant. Validé n8n MCP (0 erreur). Procédure : `DOCS/ops/n8n-error-handler.md`.
+- ⬜ **Prod** (n8n API, plan à revoir) : importer + activer, affecter comme Error Workflow aux 16
+  workflows actifs, tester via workflow jetable.
+- ⬜ **Coolify** : renseigner `CLIENT_CR_RECIPIENT` (ou `CLIENT_SUMMARY_RECIPIENT`) dans l'env n8n —
+  sinon l'alerte n'a pas de destinataire.
 
-**Fait quand**
-- Un échec provoqué (ex. credential cassé) sur `morning-briefing` déclenche un e-mail reçu en < 1 min.
-- Error Workflow affecté à tous les workflows `[PROD]`.
+**Fait quand** : échec provoqué (workflow jetable qui `throw`) → e-mail reçu < 1 min ; Error Workflow
+affecté aux 16 actifs.
+
+**Reste (suite)** : throttling Redis (1 e-mail / workflow / 15 min).
 
 **Effort** : ~0,5 j
 

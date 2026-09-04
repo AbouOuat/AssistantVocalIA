@@ -93,7 +93,11 @@ non pinnée est la cause racine (déjà cassé smart-agent en juin, cf. `aa088eb
    `backend/services/ai_service.py` (→ `"non renseigné"`), `docker-compose.yml` (défauts n8n vidés),
    `workflows/*classifier*-v2.json` (fallbacks JS `|| 'ouat.abou34@…'` → `|| ''`). `grep` global vide.
 
-**État au 2026-09-04** : Étape 0 quasi close. Reste : `WORKFLOW_VERSION=v1` dans l'env Coolify (pt 3).
+**État au 2026-09-04** : Étape 0 + Étape 1/Path B closes (repo + prod). Reste côté **Coolify** (toi) :
+- `WORKFLOW_VERSION=v1` sur le service `backend` + redeploy ;
+- `CLIENT_GMAIL`, `CLIENT_SUMMARY_RECIPIENT`, `CLIENT_CR_RECIPIENT`, `OPENWEATHER_API_KEY`,
+  `CLIENT_CALENDAR_ID` sur le service `n8n` (constatés vides dans le conteneur) + redeploy n8n
+  (qui appliquera aussi le pin `2.22.5`).
 
 ---
 
@@ -113,9 +117,14 @@ et `workflows/outlook-email-classifier-v2.json` : nodes `Classification LLM Chai
 `Construire prompt LLM` émet `systemPrompt`/`userPrompt`/`jsonSchema` séparés ; les parsers lisent
 `$json.choices[0].message.content` avec `JSON.parse` direct (plus de regex). Schéma Gmail : 7 champs/e-mail ;
 schéma Outlook : + `interlocuteur`, `brouillon_recommande`, `brouillon`.
-⬜ **Reste : importer les 2 workflows réécrits en prod** (n8n API, étape à revoir) + re-lier le credential
-header-auth OpenAI + test live. Puce CV « migration vers LangChain » **retirée** ; devient « sortie LLM
-structurée validée par JSON Schema ».
+✅ **Importé en prod** (2026-09-04, `PUT` chirurgical conservant les vraies creds — le node httpRequest
+réutilise `Header Auth account` id `F99p27Ao9ucj5aeX`, celle des 2 v1, rien à re-lier).
+✅ **Test live Gmail v2** (`{limit:1}`, exec `27355`) : success, 10/10 nodes OK, le node OpenAI renvoie du
+JSON strict conforme au schéma, parsé sans regex. Plus de `Could not get parameter`.
+Outlook v2 : importé + vérifié structurellement, test fonctionnel via l'app à faire.
+Puce CV « migration vers LangChain » **retirée** → « sortie LLM structurée validée par JSON Schema ».
+⚠️ Découvert : `CLIENT_GMAIL` / `CLIENT_SUMMARY_RECIPIENT` **vides dans le conteneur n8n prod** →
+à renseigner dans l'env Coolify (checklist ci-dessous).
 
 <details><summary>Décision archivée — Path A vs Path B</summary>
 

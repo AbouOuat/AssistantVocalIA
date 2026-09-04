@@ -162,36 +162,57 @@ Puce CV « migration vers LangChain » **retirée** → « sortie LLM structuré
 
 ---
 
-## T2 — RAG sur historique conversations + synthèses e-mails  ⬜
+## T2 — RAG sur historique conversations + synthèses e-mails  🟡
 
 **Pourquoi** : RAG / bases vectorielles ne sont aujourd'hui revendiqués qu'au niveau « formation ».
 Un RAG réel en prod substantie la compétence.
 
-**Corpus** (réel et disponible)
-- exports `sessions/*.md` (Session Summary) — ⚠️ dossier vide aujourd'hui, il faut générer quelques sessions
-- analyses e-mails archivées dans Redis (`emails_structured`, `summaryText`, avec timestamp)
-- ~~historique conversations PostgreSQL~~ **n'existe pas** (voir écarts CV↔code ci-dessus) — soit on
-  se limite aux 2 sources ci-dessus, soit on ajoute d'abord une table `messages` + persistance dans
-  le handler WebSocket (~2 h) si on veut vraiment revendiquer « historique PostgreSQL »
+**Décisions validées (2026-09-04)** : retrieval **SQL direct + pgvector** (pas de wrapper
+LangChain — même logique que Path B) ; `sessions/*.md` peuplé en générant 3-5 sessions
+via le vrai mécanisme de génération (voir ci-dessous, pas écrites à la main).
 
-**À faire**
-1. **Store** : `pgvector` sur le Postgres existant (extension + table
-   `documents(id, content, embedding vector, metadata jsonb, source, created_at)`).
-   Alternative QDrant si on veut coller au vocabulaire CV — reco pgvector (zéro infra en plus).
-2. **Embeddings** : OpenAI `text-embedding-3-small`.
-3. **Ingestion** : script de chunk (~500–800 tokens, overlap ~100) + upsert.
-   Déclencheurs : fin de session (après export `.md`) et après chaque analyse e-mail.
-4. **Retrieval** : retriever LangChain (similarity, k≈5) exposé comme nouvel outil
-   `rechercher_historique` dans `JARVIS_TOOLS` (`backend/services/ai_service.py`) + utilisé dans la démo "Memory".
-5. **Éval** : 10–15 questions de référence + source(s) attendue(s) → mesurer **hit rate @k**
-   (la source attendue est-elle dans le top-k retourné).
+**Corpus**
+- exports `sessions/*.md` (Session Summary) — ✅ 4 sessions de test générées (voir plus bas).
+- analyses e-mails archivées dans Redis (`emails_structured`) — ingestion codée, corpus réel
+  à peupler par l'utilisateur (relancer les classifiers en prod).
+- ~~historique conversations PostgreSQL~~ toujours hors périmètre (n'existe pas).
+
+**Écart trouvé en démarrant T2** : le mécanisme "Session Summary → export `.md` dans
+`/sessions/`" décrit dans CLAUDE.md **n'était pas implémenté** — le handler WS
+`session_summary` renvoyait le texte sur le WebSocket mais n'écrivait jamais de fichier
+(aucun code de persistance, aucun trigger frontend). Comblé au passage : voir
+`backend/services/session_summary_service.py`.
+
+**Fait (2026-09-04)**
+1. ✅ **Store** : `docker-compose.yml` image postgres → `pgvector/pgvector:pg16` ;
+   `requirements_backend.txt` + `pgvector` ; `backend/models.py` → table `documents`
+   (`Vector(1536)`, `pgvector.sqlalchemy`), `init_db()` crée l'extension.
+2. ✅ **Embeddings** : `text-embedding-3-small` (`backend/services/rag_service.py::embed_text`).
+3. ✅ **Ingestion** : `backend/scripts/ingest_rag.py` — Redis `emails_structured` (gmail+outlook)
+   + `sessions/*.md`, upsert idempotent par `user_id/source/external_id`.
+4. ✅ **Retrieval** : SQL direct (`Document.embedding.cosine_distance(...)`, ORDER BY, LIMIT k) —
+   pas de retriever LangChain. Exposé comme outil `rechercher_historique` dans `JARVIS_TOOLS`
+   + handler `_execute_tool` (main.py).
+5. ✅ **Éval** : `eval/rag/run_eval.py` (hit rate @k), `qa_reference.example.csv` (5 questions
+   sur les 4 sessions générées), `--dry-run` validé.
+6. ✅ **Génération sessions de test** : `backend/scripts/generate_test_sessions.py` — 4 scénarios
+   plausibles (briefing/agenda, triage email urgent, préférences, plan d'action réunion), génération
+   via un vrai appel LLM (le même code que produirait le mécanisme normal), écrits dans `sessions/`.
+
+**⚠️ Non validé en conditions réelles dans cette session** : `docker pull pgvector/pgvector:pg16`
+échoue systématiquement dans ce sandbox (CDN Docker Hub, `EOF`, 3 tentatives). Validation faite
+en remplacement : DDL + requête `cosine_distance` **compilés** avec succès contre le dialecte
+PostgreSQL (SQL généré vérifié : opérateur `<=>`, `ORDER BY distance LIMIT k`), fonctions pures
+(`_format_email`, `_extract_title`) testées unitairement. **Reste : lancer réellement
+`docker compose up -d postgres` (ou en prod) + `ingest_rag.py` + `run_eval.py` sur une machine
+avec accès Docker Hub complet.**
 
 **Fait quand**
-- Une question en langage naturel sur une session ou une analyse e-mail passée renvoie une réponse **sourcée**.
-- `DOCS/reports/rag-eval-2026-09-XX.md` commité avec le hit rate @5.
-- `pgvector` ajouté à `docker-compose.yml` + `requirements_backend.txt`.
+- ⬜ Une question en langage naturel sur une session passée renvoie une réponse **sourcée** (code prêt, pas testé live).
+- ⬜ `DOCS/reports/rag-eval-<date>.md` commité avec le hit rate @5 réel (pas dry-run).
+- ✅ `pgvector` ajouté à `docker-compose.yml` + `requirements_backend.txt`.
 
-**Effort** : ~1,5–2 j
+**Effort** : ~1,5–2 j estimés — ~1 j passé (code complet), reste la validation live (~1-2h une fois Docker Hub accessible).
 
 ---
 

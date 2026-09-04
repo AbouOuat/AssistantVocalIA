@@ -15,10 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 from backend.services.ai_service import (
     ConversationContext,
-    chat_completion_stream,
     chat_completion_with_tools,
 )
 from backend.services.memory_service import memory_service
+from backend.services.session_summary_service import (
+    export_session_summary_md,
+    generate_session_summary,
+)
 from backend.services.voice_service import (
     check_realtime_access,
     decode_audio_base64,
@@ -102,6 +105,7 @@ _TOOL_PROGRESS: dict[str, str] = {
     "envoyer_email_outlook":      "Envoi de l'email via Outlook...",
     "analyser_notes":             "Analyse des notes et creation du plan d'action...",
     "rechercher_memoire":         "Recherche en memoire...",
+    "rechercher_historique":      "Recherche dans l'historique (RAG)...",
     "sauvegarder_memoire":        "Memorisation en cours...",
 }
 
@@ -379,6 +383,18 @@ async def _execute_tool(name: str, args: dict, user_id: int) -> str:
         if not results:
             return f"Rien trouvÃ© en mÃ©moire pour Â« {requete} Â»."
         return "\n".join(results[:8])
+
+    if name == "rechercher_historique":
+        requete = args.get("requete", "").strip()
+        k = min(int(args.get("k", 5)), 10)
+        if not requete:
+            return "PrÃ©cise ce que tu cherches dans l'historique."
+        try:
+            from backend.services.rag_service import format_search_results
+            return await format_search_results(user_id, requete, k=k)
+        except Exception as rag_err:
+            logger.error(f"RAG search error: {rag_err}", exc_info=True)
+            return "Recherche dans l'historique indisponible pour le moment."
 
     return f"Outil inconnu : {name}."
 
@@ -850,15 +866,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 history_preview = [
                     f"{m['role']}: {m['content'][:80]}" for m in ctx.history[-10:]
                 ]
-                summary_prompt = (
-                    "RÃ©sume cette session en 3-5 bullets (dÃ©cisions, tÃ¢ches, mÃ©mos):\n"
-                    f"Historique: {history_preview}\n"
-                    f"MÃ©moire: {all_memory}"
-                )
-                summary_ctx = ConversationContext()
-                summary = ""
-                async for chunk in chat_completion_stream(summary_prompt, summary_ctx, temperature=0.3):
-                    summary += chunk
+                summary = await generate_session_summary(history_preview, all_memory)
+                try:
+                    export_session_summary_md(summary, user_id)
+                except Exception as export_err:
+                    logger.warning(f"Session summary export Ã©chouÃ©: {export_err}")
 
                 await websocket.send_text(json.dumps({
                     "type": "session_summary",

@@ -56,3 +56,4 @@ sessions/
 
 # Éval classifieur — jeu annoté local (peut contenir du contenu e-mail réel)
 eval/classifier/dataset.csv
+docker-compose.override.yml

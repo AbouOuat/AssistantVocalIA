@@ -13,6 +13,7 @@ pydantic-settings==2.1.0
 # Database
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
+pgvector==0.2.5  # RAG (T2) — colonnes vectorielles Postgres, table `documents`
 
 # Cache / Memory
 redis[asyncio]==5.0.1

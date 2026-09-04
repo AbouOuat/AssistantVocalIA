@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 = postgres:16 + extension pgvector préinstallée (drop-in,
+    # mêmes volumes/données). Requis par le RAG (T2) — table `documents`.
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_DB: jarvis

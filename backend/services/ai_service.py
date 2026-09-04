@@ -67,6 +67,7 @@ Exception : lire, lister, résumer, créer un rappel, créer un événement agen
 - Morning briefing : météo + emails prioritaires + agenda du jour
 - Analyse de notes → plan d'action
 - Mémoire persistante : projets, préférences, tâches
+- Recherche sémantique dans l'historique (sessions passées, synthèses e-mails) : rechercher_historique
 - Brouillons Gmail, envoi Outlook
 
 ## Style vocal
@@ -358,6 +359,28 @@ JARVIS_TOOLS = [
                 "type": "object",
                 "properties": {
                     "requete": {"type": "string", "description": "Ce qu'on cherche en mémoire"}
+                },
+                "required": ["requete"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rechercher_historique",
+            "description": (
+                "Chercher dans l'historique des sessions passées et des synthèses d'e-mails "
+                "archivées (recherche sémantique — RAG). À utiliser pour : 'qu'est-ce qu'on a "
+                "décidé sur X la semaine dernière ?', 'résume mes e-mails urgents du mois', "
+                "'de quoi on parlait dans la session sur Y ?'. Différent de rechercher_memoire "
+                "(préférences/tâches structurées) : ici la recherche porte sur du texte libre "
+                "(sessions, synthèses e-mails)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "requete": {"type": "string", "description": "Question ou sujet recherché"},
+                    "k": {"type": "integer", "description": "Nombre de résultats (défaut 5)"},
                 },
                 "required": ["requete"],
             },

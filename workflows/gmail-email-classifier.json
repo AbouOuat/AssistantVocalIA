@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "[DEV] Gmail Email Classifier",
   "nodes": [
     {
@@ -7,13 +7,19 @@
       "name": "Démarrage manuel",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-400, 100]
+      "position": [
+        -400,
+        100
+      ]
     },
     {
       "parameters": {
         "rule": {
           "interval": [
-            { "field": "cronExpression", "expression": "0 8,12,18 * * 1-5" }
+            {
+              "field": "cronExpression",
+              "expression": "0 8,12,18 * * 1-5"
+            }
           ]
         }
       },
@@ -21,7 +27,10 @@
       "name": "Planification 8h 12h 18h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [-400, 280]
+      "position": [
+        -400,
+        280
+      ]
     },
     {
       "parameters": {
@@ -34,18 +43,24 @@
       "name": "Webhook Jarvis",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [-400, 460],
+      "position": [
+        -400,
+        460
+      ],
       "webhookId": "email-classifier"
     },
     {
       "parameters": {
-        "jsCode": "// Limite depuis le webhook si dispo, sinon defaut 10, toujours 1-50\nlet limit = 10;\nlet summaryRecipient = 'ouat.abou34@gmail.com';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) { /* trigger sans body */ }\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+        "jsCode": "const envv = (k) => { try { return $env[k]; } catch (e) { return undefined; } };\n// Limite depuis le webhook si dispo, sinon defaut 10, toujours 1-50\nlet limit = 10;\nlet summaryRecipient = envv('CLIENT_GMAIL') || '';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) { /* trigger sans body */ }\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
       },
       "id": "config-node",
       "name": "Configuration",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-160, 280]
+      "position": [
+        -160,
+        280
+      ]
     },
     {
       "parameters": {
@@ -53,16 +68,26 @@
         "operation": "getAll",
         "returnAll": false,
         "limit": "={{ $('Configuration').first().json.maxEmails }}",
-        "filters": { "q": "is:unread newer_than:8h" }
+        "filters": {
+          "q": "is:unread newer_than:8h"
+        }
       },
       "id": "gmail-read",
       "name": "Gmail - Lire emails",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [80, 280],
+      "position": [
+        80,
+        280
+      ],
       "alwaysOutputData": true,
       "continueOnFail": true,
-      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail Jarvis"
+        }
+      }
     },
     {
       "parameters": {
@@ -72,15 +97,29 @@
       "name": "Préparer emails",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [320, 280],
+      "position": [
+        320,
+        280
+      ],
       "continueOnFail": true
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "conditions": [
-            { "leftValue": "={{ $json.no_emails }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }
+            {
+              "leftValue": "={{ $json.no_emails }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
           ],
           "combinator": "and"
         }
@@ -89,7 +128,10 @@
       "name": "Emails présents ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [560, 280]
+      "position": [
+        560,
+        280
+      ]
     },
     {
       "parameters": {
@@ -100,7 +142,10 @@
       "name": "Répondre - Aucun email",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [800, 160]
+      "position": [
+        800,
+        160
+      ]
     },
     {
       "parameters": {
@@ -117,9 +162,17 @@
       "name": "OpenAI - Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [800, 400],
+      "position": [
+        800,
+        400
+      ],
       "continueOnFail": true,
-      "credentials": { "httpHeaderAuth": { "id": "openai-header-auth", "name": "OpenAI Header Auth" } }
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "openai-header-auth",
+          "name": "OpenAI Header Auth"
+        }
+      }
     },
     {
       "parameters": {
@@ -129,7 +182,10 @@
       "name": "Parser et formater",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1040, 400],
+      "position": [
+        1040,
+        400
+      ],
       "continueOnFail": true
     },
     {
@@ -144,9 +200,17 @@
       "name": "Gmail - Envoyer synthèse",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [1280, 280],
+      "position": [
+        1280,
+        280
+      ],
       "continueOnFail": true,
-      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail Jarvis"
+        }
+      }
     },
     {
       "parameters": {
@@ -157,26 +221,132 @@
       "name": "Répondre Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1280, 480]
+      "position": [
+        1280,
+        480
+      ]
     }
   ],
   "connections": {
-    "Démarrage manuel": { "main": [[{ "node": "Configuration", "type": "main", "index": 0 }]] },
-    "Planification 8h 12h 18h": { "main": [[{ "node": "Configuration", "type": "main", "index": 0 }]] },
-    "Webhook Jarvis": { "main": [[{ "node": "Configuration", "type": "main", "index": 0 }]] },
-    "Configuration": { "main": [[{ "node": "Gmail - Lire emails", "type": "main", "index": 0 }]] },
-    "Gmail - Lire emails": { "main": [[{ "node": "Préparer emails", "type": "main", "index": 0 }]] },
-    "Préparer emails": { "main": [[{ "node": "Emails présents ?", "type": "main", "index": 0 }]] },
-    "Emails présents ?": {
+    "Démarrage manuel": {
       "main": [
-        [{ "node": "Répondre - Aucun email", "type": "main", "index": 0 }],
-        [{ "node": "OpenAI - Classifier", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "OpenAI - Classifier": { "main": [[{ "node": "Parser et formater", "type": "main", "index": 0 }]] },
-    "Parser et formater": { "main": [[{ "node": "Gmail - Envoyer synthèse", "type": "main", "index": 0 }, { "node": "Répondre Webhook", "type": "main", "index": 0 }]] }
+    "Planification 8h 12h 18h": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Jarvis": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire emails": {
+      "main": [
+        [
+          {
+            "node": "Préparer emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer emails": {
+      "main": [
+        [
+          {
+            "node": "Emails présents ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails présents ?": {
+      "main": [
+        [
+          {
+            "node": "Répondre - Aucun email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OpenAI - Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Classifier": {
+      "main": [
+        [
+          {
+            "node": "Parser et formater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser et formater": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Envoyer synthèse",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Répondre Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["jarvis", "hackathon", "demo"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "jarvis",
+    "hackathon",
+    "demo"
+  ]
 }

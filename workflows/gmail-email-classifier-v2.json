@@ -52,7 +52,7 @@
     },
     {
       "parameters": {
-        "jsCode": "let limit = 10;\nlet summaryRecipient = (typeof process !== 'undefined' && process.env?.CLIENT_GMAIL) || '';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) {}\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+        "jsCode": "const envv = (k) => { try { return $env[k]; } catch (e) { return undefined; } };\nlet limit = 10;\nlet summaryRecipient = (envv('CLIENT_GMAIL')) || '';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) {}\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
       },
       "id": "cfg-gv2-004",
       "name": "Configuration",

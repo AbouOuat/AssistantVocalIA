@@ -1,0 +1,209 @@
+{
+ "updatedAt": "2026-09-04T09:58:35.029Z",
+ "createdAt": "2026-09-04T09:58:35.029Z",
+ "id": "j8OJ3Tk1T5hb0fhw",
+ "name": "error-handler",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {},
+   "id": "err-trigger-001",
+   "name": "Error Trigger",
+   "type": "n8n-nodes-base.errorTrigger",
+   "typeVersion": 1,
+   "position": [
+    -260,
+    260
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "// Alerte échec workflow n8n -> e-mail. Voir workflows/error-handler.json.\nconst e = $json || {};\nconst wf = e.workflow || {};\nconst ex = e.execution || {};\nconst err = ex.error || {};\nconst when = new Date().toISOString();\n\nconst subject = `🔴 Jarvis n8n — échec « ${wf.name || wf.id || 'workflow inconnu'} »`;\nconst body = [\n  `Workflow : ${wf.name || '?'} (${wf.id || '?'})`,\n  `Horodatage : ${when}`,\n  `Nœud en échec : ${ex.lastNodeExecuted || '?'}`,\n  `Erreur : ${err.message || 'inconnue'}`,\n  ex.id ? `Exécution : ${ex.id}` : '',\n  ex.url ? `Lien : ${ex.url}` : '',\n  '',\n  '— Alerte automatique (workflows/error-handler.json)'\n].filter(Boolean).join('\\n');\n\n// Destinataire : uniquement via env (multi-tenant, aucun défaut identifiant).\nconst to = (typeof process !== 'undefined' && (\n  process.env.CLIENT_CR_RECIPIENT ||\n  process.env.CLIENT_SUMMARY_RECIPIENT ||\n  process.env.SUMMARY_RECIPIENT_EMAIL\n)) || '';\n\nif (!to) {\n  // Pas de destinataire configuré : on log et on s'arrête proprement (pas d'e-mail).\n  console.warn('[error-handler] aucun destinataire (CLIENT_CR_RECIPIENT / CLIENT_SUMMARY_RECIPIENT vides)');\n  return [];\n}\nreturn [{ json: { to, subject, body } }];"
+   },
+   "id": "err-format-002",
+   "name": "Formater alerte",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -40,
+    260
+   ]
+  },
+  {
+   "parameters": {
+    "sendTo": "={{ $json.to }}",
+    "subject": "={{ $json.subject }}",
+    "emailType": "text",
+    "message": "={{ $json.body }}",
+    "options": {}
+   },
+   "id": "err-mail-003",
+   "name": "Gmail - Envoyer alerte",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    200,
+    260
+   ],
+   "onError": "continueRegularOutput",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "webhookId": "046c71b6-33cf-4106-9f99-c92812e9e90b"
+  }
+ ],
+ "connections": {
+  "Error Trigger": {
+   "main": [
+    [
+     {
+      "node": "Formater alerte",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Formater alerte": {
+   "main": [
+    [
+     {
+      "node": "Gmail - Envoyer alerte",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "staticData": null,
+ "meta": null,
+ "pinData": null,
+ "versionId": "91e287a8-7f05-4137-a5d8-0e91bfbb3813",
+ "activeVersionId": "91e287a8-7f05-4137-a5d8-0e91bfbb3813",
+ "versionCounter": 1,
+ "triggerCount": 0,
+ "shared": [
+  {
+   "updatedAt": "2026-09-04T09:58:35.034Z",
+   "createdAt": "2026-09-04T09:58:35.034Z",
+   "role": "workflow:owner",
+   "workflowId": "j8OJ3Tk1T5hb0fhw",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-09-04T09:58:35.036Z",
+  "createdAt": "2026-09-04T09:58:35.036Z",
+  "versionId": "91e287a8-7f05-4137-a5d8-0e91bfbb3813",
+  "workflowId": "j8OJ3Tk1T5hb0fhw",
+  "nodes": [
+   {
+    "parameters": {},
+    "id": "err-trigger-001",
+    "name": "Error Trigger",
+    "type": "n8n-nodes-base.errorTrigger",
+    "typeVersion": 1,
+    "position": [
+     -260,
+     260
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "// Alerte échec workflow n8n -> e-mail. Voir workflows/error-handler.json.\nconst e = $json || {};\nconst wf = e.workflow || {};\nconst ex = e.execution || {};\nconst err = ex.error || {};\nconst when = new Date().toISOString();\n\nconst subject = `🔴 Jarvis n8n — échec « ${wf.name || wf.id || 'workflow inconnu'} »`;\nconst body = [\n  `Workflow : ${wf.name || '?'} (${wf.id || '?'})`,\n  `Horodatage : ${when}`,\n  `Nœud en échec : ${ex.lastNodeExecuted || '?'}`,\n  `Erreur : ${err.message || 'inconnue'}`,\n  ex.id ? `Exécution : ${ex.id}` : '',\n  ex.url ? `Lien : ${ex.url}` : '',\n  '',\n  '— Alerte automatique (workflows/error-handler.json)'\n].filter(Boolean).join('\\n');\n\n// Destinataire : uniquement via env (multi-tenant, aucun défaut identifiant).\nconst to = (typeof process !== 'undefined' && (\n  process.env.CLIENT_CR_RECIPIENT ||\n  process.env.CLIENT_SUMMARY_RECIPIENT ||\n  process.env.SUMMARY_RECIPIENT_EMAIL\n)) || '';\n\nif (!to) {\n  // Pas de destinataire configuré : on log et on s'arrête proprement (pas d'e-mail).\n  console.warn('[error-handler] aucun destinataire (CLIENT_CR_RECIPIENT / CLIENT_SUMMARY_RECIPIENT vides)');\n  return [];\n}\nreturn [{ json: { to, subject, body } }];"
+    },
+    "id": "err-format-002",
+    "name": "Formater alerte",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     -40,
+     260
+    ]
+   },
+   {
+    "parameters": {
+     "sendTo": "={{ $json.to }}",
+     "subject": "={{ $json.subject }}",
+     "emailType": "text",
+     "message": "={{ $json.body }}",
+     "options": {}
+    },
+    "id": "err-mail-003",
+    "name": "Gmail - Envoyer alerte",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     200,
+     260
+    ],
+    "onError": "continueRegularOutput",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "webhookId": "046c71b6-33cf-4106-9f99-c92812e9e90b"
+   }
+  ],
+  "connections": {
+   "Error Trigger": {
+    "main": [
+     [
+      {
+       "node": "Formater alerte",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Formater alerte": {
+    "main": [
+     [
+      {
+       "node": "Gmail - Envoyer alerte",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": null,
+  "description": null,
+  "autosaved": false,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-09-04T09:58:42.053Z",
+    "id": 105,
+    "workflowId": "j8OJ3Tk1T5hb0fhw",
+    "versionId": "91e287a8-7f05-4137-a5d8-0e91bfbb3813",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

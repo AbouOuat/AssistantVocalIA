@@ -195,7 +195,7 @@ Un RAG réel en prod substantie la compétence.
 
 ---
 
-## T3 — Alertes e-mail sur échec de workflow n8n  🟡
+## T3 — Alertes e-mail sur échec de workflow n8n  ✅
 
 **Pourquoi** : clause CV « alertes automatiques par e-mail en cas d'échec d'un workflow ».
 Avant : uniquement `continueOnFail` (dégradation), aucun Error Trigger.
@@ -206,11 +206,14 @@ Avant : uniquement `continueOnFail` (dégradation), aucun Error Trigger.
 - ✅ **Prod** : importé + activé (`j8OJ3Tk1T5hb0fhw`), affecté comme Error Workflow aux **16 workflows
   actifs**. Test jetable (`throw`) → error-handler déclenché (`Error Trigger` + `Formater alerte`
   exécutés). Snapshots : `workflows/_prod-snapshot-2026-09-04/t3-error-workflow/`.
-- ⬜ **Coolify** : renseigner `CLIENT_CR_RECIPIENT` (ou `CLIENT_SUMMARY_RECIPIENT`) dans l'env n8n +
-  redeploy — sinon `Formater alerte` renvoie `[]` et **aucun e-mail n'est envoyé** (constaté au test).
+- ✅ **Fix `$env`** : n8n 2.22.5 vide `process.env` dans les Code nodes → helper `envv()` = `$env[k]`
+  appliqué (repo + prod) à `error-handler` + les 4 `Configuration` des classifiers. Les vars Coolify
+  sont bien injectées (vérifié : `$env.CLIENT_CR_RECIPIENT`, `CLIENT_GMAIL`, `OPENWEATHER_API_KEY`…).
 
-**Fait quand** : ✅ Error Workflow affecté aux 16 actifs + câblage prouvé. ⬜ « e-mail reçu < 1 min »
-= à revalider après la variable d'env Coolify.
+**Fait quand** : ✅ Error Workflow sur les 16 actifs. ✅ **Re-test end-to-end : workflow jetable `throw`
+→ e-mail d'alerte reçu** à `aboubakary_ouattara@hotmail.com`. T3 **terminée**.
+Bonus effet de bord : classifier v2 `summary_sent_to` = `ouat.abou34@gmail.com` (n'était plus renseigné
+depuis la purge hardcodée — corrigé).
 
 **Reste (suite)** : throttling Redis (1 e-mail / workflow / 15 min).
 

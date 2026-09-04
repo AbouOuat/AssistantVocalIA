@@ -25,10 +25,13 @@ id d'exécution, lien.
 3. ✅ Test : workflow jetable webhook→`throw` affecté à l'error handler, POST webhook → exécution
    `error` → **error-handler déclenché** (`Error Trigger` → `Formater alerte` exécutés, `status: success`),
    puis jetable supprimé.
-   ⚠️ **E-mail non envoyé** : `Formater alerte` a renvoyé `[]` car `CLIENT_CR_RECIPIENT` /
-   `CLIENT_SUMMARY_RECIPIENT` / `SUMMARY_RECIPIENT_EMAIL` sont **vides dans le conteneur n8n prod**.
-   Le câblage est prouvé ; la livraison de l'e-mail marchera dès que l'une de ces variables sera
-   renseignée dans l'env Coolify + redeploy n8n.
+4. ✅ **Fix `$env`** (2026-09-04) : sur n8n 2.22.5, `process.env` est vide dans les Code nodes ;
+   `$env` fonctionne. Les Code nodes concernés (`Formater alerte` ici, `Configuration` des
+   classifiers) lisent désormais `$env` via un helper `envv(k)`. Snapshots :
+   `workflows/_prod-snapshot-2026-09-04/fix-env/`.
+   → **Re-test OK** : workflow jetable `throw` → `Formater alerte` renvoie
+   `to = aboubakary_ouattara@hotmail.com`, `Gmail - Envoyer alerte` s'exécute → **e-mail envoyé**.
+   Les vars Coolify (`CLIENT_CR_RECIPIENT`, etc.) sont bien injectées et lisibles via `$env`.
 
 ## Rétablir / retirer
 

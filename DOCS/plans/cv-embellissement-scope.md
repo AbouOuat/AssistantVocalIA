@@ -83,16 +83,17 @@ non pinnée est la cause racine (déjà cassé smart-agent en juin, cf. `aa088eb
 
 **À faire avant T1 :**
 1. ✅ **Pinner** `n8nio/n8n` → `2.22.5` dans `docker-compose.yml` (version prod relevée via `/rest/settings`).
-2. ⬜ **Un seul `scheduleTrigger` actif par paire** (Gmail, Outlook) — les 2 webhooks restent actifs
-   (toggle IHM), mais cron unique. Intérim : cron **v1 actif**, cron **v2 désactivé**. → action prod n8n API.
+2. ✅ **Un seul `scheduleTrigger` actif par paire** — cron des 2 classifiers **v2 désactivé en prod**
+   (n8n API PUT, `disabled:true` sur le node schedule ; workflows + webhooks restent actifs). Snapshots
+   rollback : `workflows/_prod-snapshot-2026-09-04/`. Repo : `disabled:true` posé aussi dans les 2 JSON v2.
+   Cron v1 inchangé (moteur d'analyse hebdo).
 3. ✅ **Aligner `WORKFLOW_VERSION`** : `config.py` → `v1`, `.env.example` → `v1`, `docker-compose.yml`
    backend déjà `v1`, variable retirée du service `n8n`. ⬜ reste : env Coolify à mettre à `v1`.
 4. ✅ **Purger le hardcodé** `ouat.abou34@*` : `backend/main.py` (→ `settings.CLIENT_CR_RECIPIENT`),
-   `backend/services/ai_service.py` (→ `"non renseigné"`), `docker-compose.yml` (défauts n8n vidés).
-   ⬜ reste : fallbacks JS dans `workflows/*classifier*.json` → nettoyés en Étape 1 (réécriture Path B).
+   `backend/services/ai_service.py` (→ `"non renseigné"`), `docker-compose.yml` (défauts n8n vidés),
+   `workflows/*classifier*-v2.json` (fallbacks JS `|| 'ouat.abou34@…'` → `|| ''`). `grep` global vide.
 
-**État au 2026-09-04** : repo/local fait (commit à venir). Restent : action prod n8n (pt 2), env Coolify (pt 3).
-Effort restant : ~30 min. Détail et séquence : `DOCS/reports/repo-vs-n8n-prod-2026-09-01.md` §7.
+**État au 2026-09-04** : Étape 0 quasi close. Reste : `WORKFLOW_VERSION=v1` dans l'env Coolify (pt 3).
 
 ---
 
@@ -105,7 +106,18 @@ La clause CV « sortie structurée validée par schéma » et « fiabiliser le p
 **Prérequis** : étape 0 faite (le node v2 lève `Could not get parameter` aujourd'hui — on ne peut pas
 brancher un parser sur un node qui ne s'exécute pas).
 
-**Décision à prendre — Path A ou Path B :**
+**✅ Décision : Path B (2026-09-04).** Réécriture faite côté repo dans `workflows/gmail-email-classifier-v2.json`
+et `workflows/outlook-email-classifier-v2.json` : nodes `Classification LLM Chain` (`chainLlm`) +
+`OpenAI Chat Model` (`lmChatOpenAi`) **supprimés** → 1 node `OpenAI - Classification (JSON Schema)`
+(`httpRequest` POST `chat/completions`, auth header, `response_format:{type:"json_schema",strict:true}`).
+`Construire prompt LLM` émet `systemPrompt`/`userPrompt`/`jsonSchema` séparés ; les parsers lisent
+`$json.choices[0].message.content` avec `JSON.parse` direct (plus de regex). Schéma Gmail : 7 champs/e-mail ;
+schéma Outlook : + `interlocuteur`, `brouillon_recommande`, `brouillon`.
+⬜ **Reste : importer les 2 workflows réécrits en prod** (n8n API, étape à revoir) + re-lier le credential
+header-auth OpenAI + test live. Puce CV « migration vers LangChain » **retirée** ; devient « sortie LLM
+structurée validée par JSON Schema ».
+
+<details><summary>Décision archivée — Path A vs Path B</summary>
 
 | | Path A | Path B *(recommandé)* |
 |---|---|---|
@@ -114,7 +126,9 @@ brancher un parser sur un node qui ne s'exécute pas).
 | Robustesse | dépend du pin n8n ; recasse possible aux upgrades | indépendant de n8n ; c'est déjà le mécanisme de v1 qui n'a jamais cassé |
 | Effort | + trouver/valider un pin compatible | ~équivalent (le HTTP node existe déjà en v1, on ajoute juste le schéma) |
 
-**À faire**
+</details>
+
+**À faire** *(Path B — partiellement fait, cf. encadré ✅ ci-dessus)*
 1. Selon Path retenu : brancher un **Structured Output Parser** sur `chainLlm` (A) **ou** `httpRequest` +
    `response_format: {type: "json_schema", json_schema: {...}}` (B). Schéma par e-mail :
    `id, urgence(haute|moyenne|faible), interlocuteur(enum), action(repondre|lire|relancer|classer|aucune),

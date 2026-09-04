@@ -7,19 +7,31 @@
       "name": "Démarrage manuel",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-400, 100]
+      "position": [
+        -400,
+        100
+      ]
     },
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 1" }]
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
         }
       },
       "id": "schedule-gv2-002",
       "name": "Planification 8h Lundi",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [-400, 280]
+      "position": [
+        -400,
+        280
+      ],
+      "disabled": true
     },
     {
       "parameters": {
@@ -32,18 +44,24 @@
       "name": "Webhook Jarvis",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [-400, 460],
+      "position": [
+        -400,
+        460
+      ],
       "webhookId": "email-classifier-v2"
     },
     {
       "parameters": {
-        "jsCode": "let limit = 10;\nlet summaryRecipient = (typeof process !== 'undefined' && process.env?.CLIENT_GMAIL) || 'ouat.abou34@gmail.com';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) {}\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
+        "jsCode": "let limit = 10;\nlet summaryRecipient = (typeof process !== 'undefined' && process.env?.CLIENT_GMAIL) || '';\ntry {\n  const allItems = $input.all();\n  for (const item of allItems) {\n    const bodyLimit = item.json?.body?.limit;\n    if (bodyLimit !== undefined && bodyLimit !== null) {\n      const parsed = parseInt(String(bodyLimit), 10);\n      if (!isNaN(parsed)) limit = Math.max(1, Math.min(50, parsed));\n      break;\n    }\n  }\n} catch(e) {}\nreturn [{ json: { maxEmails: limit, summaryRecipient, openAiModel: 'gpt-4o-mini', lookbackHours: 8 } }];"
       },
       "id": "cfg-gv2-004",
       "name": "Configuration",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-160, 280]
+      "position": [
+        -160,
+        280
+      ]
     },
     {
       "parameters": {
@@ -51,16 +69,26 @@
         "operation": "getAll",
         "returnAll": false,
         "limit": "={{ $('Configuration').first().json.maxEmails }}",
-        "filters": { "q": "is:unread newer_than:8h" }
+        "filters": {
+          "q": "is:unread newer_than:8h"
+        }
       },
       "id": "gmail-gv2-005",
       "name": "Gmail - Lire emails",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [80, 280],
+      "position": [
+        80,
+        280
+      ],
       "alwaysOutputData": true,
       "continueOnFail": true,
-      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail Jarvis"
+        }
+      }
     },
     {
       "parameters": {
@@ -70,14 +98,30 @@
       "name": "Préparer emails",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [320, 280],
+      "position": [
+        320,
+        280
+      ],
       "continueOnFail": true
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [{ "leftValue": "={{ $json.no_emails }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.no_emails }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
           "combinator": "and"
         }
       },
@@ -85,7 +129,10 @@
       "name": "Emails présents ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [560, 280]
+      "position": [
+        560,
+        280
+      ]
     },
     {
       "parameters": {
@@ -96,63 +143,42 @@
       "name": "Répondre - Aucun email",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [800, 100]
+      "position": [
+        800,
+        100
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// Construit le prompt complet pour le LLM Chain\nconst emails = $('Préparer emails').first().json.emails || [];\nconst systemPrompt = `Tu classes des emails. Réponds uniquement en JSON valide (pas de markdown). Champs attendus: emails (array), global_summary (string max 5 lignes). Par email: id, urgence=haute|moyenne|faible, action=repondre|lire|relancer|classer|aucune, echeance_detectee=true|false, date_echeance=YYYY-MM-DD ou null, resume=une phrase, raison_urgence=une phrase ou vide. Critères urgence: date limite, convocation, délai, assignation, jugement, relance.`;\nconst userPrompt = 'Classe ces emails:\\n\\n' + JSON.stringify(emails);\nreturn [{ json: { ...$('Préparer emails').first().json, classificationPrompt: `${systemPrompt}\\n\\n${userPrompt}` } }];"
+        "jsCode": "// Construit system + user prompt + schema pour l'appel OpenAI\nconst emails = $('Préparer emails').first().json.emails || [];\nconst systemPrompt = `Tu classes des emails. Réponds uniquement en JSON valide (pas de markdown). Champs attendus: emails (array), global_summary (string max 5 lignes). Par email: id, urgence=haute|moyenne|faible, action=repondre|lire|relancer|classer|aucune, echeance_detectee=true|false, date_echeance=YYYY-MM-DD ou null, resume=une phrase, raison_urgence=une phrase ou vide. Critères urgence: date limite, convocation, délai, assignation, jugement, relance.`;\nconst userPrompt = 'Classe ces emails:\\n\\n' + JSON.stringify(emails);\nreturn [{ json: { ...$('Préparer emails').first().json, systemPrompt, userPrompt, jsonSchema: {\"name\": \"email_classification\", \"strict\": true, \"schema\": {\"type\": \"object\", \"additionalProperties\": false, \"properties\": {\"emails\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"additionalProperties\": false, \"properties\": {\"id\": {\"type\": \"string\"}, \"urgence\": {\"type\": \"string\", \"enum\": [\"haute\", \"moyenne\", \"faible\"]}, \"action\": {\"type\": \"string\", \"enum\": [\"repondre\", \"lire\", \"relancer\", \"classer\", \"aucune\"]}, \"echeance_detectee\": {\"type\": \"boolean\"}, \"date_echeance\": {\"type\": [\"string\", \"null\"]}, \"resume\": {\"type\": \"string\"}, \"raison_urgence\": {\"type\": \"string\"}}, \"required\": [\"id\", \"urgence\", \"action\", \"echeance_detectee\", \"date_echeance\", \"resume\", \"raison_urgence\"]}}, \"global_summary\": {\"type\": \"string\"}}, \"required\": [\"emails\", \"global_summary\"]}} } }];"
       },
       "id": "prompt-gv2-009",
       "name": "Construire prompt LLM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [800, 460]
+      "position": [
+        800,
+        460
+      ]
     },
     {
       "parameters": {
-        "prompt": "={{ $json.classificationPrompt }}"
-      },
-      "id": "llm-chain-gv2-010",
-      "name": "Classification LLM Chain",
-      "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "typeVersion": 1.4,
-      "position": [1040, 460]
-    },
-    {
-      "parameters": {
-        "model": "gpt-4o-mini",
-        "options": {
-          "temperature": 0.1,
-          "responseFormat": "json_object"
-        }
-      },
-      "id": "openai-gv2-011",
-      "name": "OpenAI Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
-      "position": [1040, 660],
-      "credentials": {
-        "openAiApi": {
-          "id": "REPLACE_WITH_OPENAI_API_CREDENTIAL",
-          "name": "OpenAI Jarvis"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Adapté pour chainLlm : sortie dans $json.text (pas choices[0].message.content)\nconst source = $('Préparer emails').first().json;\nconst raw = $input.first().json.text || '{}';\nlet parsed;\ntry {\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(match ? match[0] : raw);\n} catch(e) {\n  parsed = { emails: [], global_summary: 'Erreur parsing réponse IA V2.' };\n}\nconst analyses = parsed.emails || [];\nconst urgent = analyses.filter(x => x.urgence === 'haute');\nconst repondre = analyses.filter(x => x.action === 'repondre');\nconst echeances = analyses.filter(x => x.echeance_detectee);\nfunction line(x) {\n  const senderShort = (x.sender || '').split('<')[0].trim() || 'Inconnu';\n  return `• ${senderShort} | ${x.subject || '(sans objet)'} | ${x.resume || ''}${x.raison_urgence ? ' — ' + x.raison_urgence : ''}`;\n}\nconst summaryText = [\n  `🤖 Synthèse Gmail V2 (LangChain) — ${new Date().toLocaleString('fr-FR')}`,\n  `Analysés: ${analyses.length} | Ignorés: ${(source.skipped || []).length}`,\n  '',\n  '🚨 Urgents',\n  urgent.length ? urgent.map(line).join('\\n') : '• Aucun.',\n  '',\n  '📩 À répondre',\n  repondre.length ? repondre.map(line).join('\\n') : '• Aucun.',\n  '',\n  '📅 Échéances',\n  echeances.length ? echeances.map(x => `• ${x.date_echeance || 'date?'} | ${x.subject || ''} | ${x.resume || ''}`).join('\\n') : '• Aucune.',\n  '',\n  '📋 Synthèse',\n  parsed.global_summary || '• Rien à signaler.'\n].join('\\n');\nconst emailMap = {};\nfor (const e of (source.emails || [])) emailMap[e.id] = e;\nconst emails_structured = analyses.map(a => {\n  const orig = emailMap[a.id] || {};\n  const fromStr = orig.sender || '';\n  const m = fromStr.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: a.id,\n    from: fromStr,\n    from_name: (m?.[1] || fromStr).trim(),\n    from_email: m?.[2] || fromStr,\n    subject: orig.subject || '(sans objet)',\n    snippet: orig.snippet || '',\n    urgence: a.urgence || 'faible',\n    action: a.action || 'lire',\n    resume: a.resume || '',\n    echeance: a.echeance_detectee ? (a.date_echeance || null) : null,\n    source: 'gmail'\n  };\n});\nreturn [{ json: { summaryText, processedCount: analyses.length, skippedCount: (source.skipped || []).length, emails_structured } }];"
+        "jsCode": "// Sortie httpRequest OpenAI : $json.choices[0].message.content (JSON strict via json_schema)\nconst source = $('Préparer emails').first().json;\nconst raw = $json.choices?.[0]?.message?.content || '{}';\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch(e) {\n  parsed = { emails: [], global_summary: 'Erreur parsing réponse IA V2.' };\n}\nconst analyses = parsed.emails || [];\nconst urgent = analyses.filter(x => x.urgence === 'haute');\nconst repondre = analyses.filter(x => x.action === 'repondre');\nconst echeances = analyses.filter(x => x.echeance_detectee);\nfunction line(x) {\n  const senderShort = (x.sender || '').split('<')[0].trim() || 'Inconnu';\n  return `• ${senderShort} | ${x.subject || '(sans objet)'} | ${x.resume || ''}${x.raison_urgence ? ' — ' + x.raison_urgence : ''}`;\n}\nconst summaryText = [\n  `🤖 Synthèse Gmail v2 — ${new Date().toLocaleString('fr-FR')}`,\n  `Analysés: ${analyses.length} | Ignorés: ${(source.skipped || []).length}`,\n  '',\n  '🚨 Urgents',\n  urgent.length ? urgent.map(line).join('\\n') : '• Aucun.',\n  '',\n  '📩 À répondre',\n  repondre.length ? repondre.map(line).join('\\n') : '• Aucun.',\n  '',\n  '📅 Échéances',\n  echeances.length ? echeances.map(x => `• ${x.date_echeance || 'date?'} | ${x.subject || ''} | ${x.resume || ''}`).join('\\n') : '• Aucune.',\n  '',\n  '📋 Synthèse',\n  parsed.global_summary || '• Rien à signaler.'\n].join('\\n');\nconst emailMap = {};\nfor (const e of (source.emails || [])) emailMap[e.id] = e;\nconst emails_structured = analyses.map(a => {\n  const orig = emailMap[a.id] || {};\n  const fromStr = orig.sender || '';\n  const m = fromStr.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: a.id,\n    from: fromStr,\n    from_name: (m?.[1] || fromStr).trim(),\n    from_email: m?.[2] || fromStr,\n    subject: orig.subject || '(sans objet)',\n    snippet: orig.snippet || '',\n    urgence: a.urgence || 'faible',\n    action: a.action || 'lire',\n    resume: a.resume || '',\n    echeance: a.echeance_detectee ? (a.date_echeance || null) : null,\n    source: 'gmail'\n  };\n});\nreturn [{ json: { summaryText, processedCount: analyses.length, skippedCount: (source.skipped || []).length, emails_structured } }];"
       },
       "id": "parse-gv2-012",
       "name": "Parser et formater",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1280, 460],
+      "position": [
+        1280,
+        460
+      ],
       "continueOnFail": true
     },
     {
       "parameters": {
         "sendTo": "={{ $('Configuration').first().json.summaryRecipient }}",
-        "subject": "🤖 Synthèse emails Gmail V2 (LangChain) — Jarvis",
+        "subject": "🤖 Synthèse emails Gmail v2 — Jarvis",
         "emailType": "text",
         "message": "={{ $json.summaryText }}",
         "options": {}
@@ -161,9 +187,17 @@
       "name": "Gmail - Envoyer synthèse",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [1520, 340],
+      "position": [
+        1520,
+        340
+      ],
       "continueOnFail": true,
-      "credentials": { "gmailOAuth2": { "id": "gmail-creds", "name": "Gmail Jarvis" } }
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-creds",
+          "name": "Gmail Jarvis"
+        }
+      }
     },
     {
       "parameters": {
@@ -174,33 +208,170 @@
       "name": "Répondre Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1520, 540]
+      "position": [
+        1520,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: $('Configuration').first().json.openAiModel || 'gpt-4o-mini',\n  temperature: 0.1,\n  response_format: { type: 'json_schema', json_schema: $json.jsonSchema },\n  messages: [\n    { role: 'system', content: $json.systemPrompt },\n    { role: 'user', content: $json.userPrompt }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "openai-http--gv2-010",
+      "name": "OpenAI - Classification (JSON Schema)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        660
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_OPENAI_HEADER_AUTH",
+          "name": "Header Auth account"
+        }
+      }
     }
   ],
   "connections": {
-    "Démarrage manuel":        { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
-    "Planification 8h Lundi":   { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
-    "Webhook Jarvis":          { "main": [[{ "node": "Configuration",         "type": "main", "index": 0 }]] },
-    "Configuration":           { "main": [[{ "node": "Gmail - Lire emails",   "type": "main", "index": 0 }]] },
-    "Gmail - Lire emails":     { "main": [[{ "node": "Préparer emails",       "type": "main", "index": 0 }]] },
-    "Préparer emails":         { "main": [[{ "node": "Emails présents ?",     "type": "main", "index": 0 }]] },
-    "Emails présents ?": {
+    "Démarrage manuel": {
       "main": [
-        [{ "node": "Répondre - Aucun email", "type": "main", "index": 0 }],
-        [{ "node": "Construire prompt LLM",  "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Construire prompt LLM":    { "main": [[{ "node": "Classification LLM Chain", "type": "main", "index": 0 }]] },
-    "OpenAI Chat Model":        { "ai_languageModel": [[{ "node": "Classification LLM Chain", "type": "ai_languageModel", "index": 0 }]] },
-    "Classification LLM Chain": { "main": [[{ "node": "Parser et formater",   "type": "main", "index": 0 }]] },
+    "Planification 8h Lundi": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Jarvis": {
+      "main": [
+        [
+          {
+            "node": "Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuration": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Lire emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Lire emails": {
+      "main": [
+        [
+          {
+            "node": "Préparer emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer emails": {
+      "main": [
+        [
+          {
+            "node": "Emails présents ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails présents ?": {
+      "main": [
+        [
+          {
+            "node": "Répondre - Aucun email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Construire prompt LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire prompt LLM": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Classification (JSON Schema)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Parser et formater": {
-      "main": [[
-        { "node": "Gmail - Envoyer synthèse", "type": "main", "index": 0 },
-        { "node": "Répondre Webhook",         "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Gmail - Envoyer synthèse",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Répondre Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Classification (JSON Schema)": {
+      "main": [
+        [
+          {
+            "node": "Parser et formater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["jarvis", "gmail", "langchain", "v2"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "jarvis",
+    "gmail",
+    "langchain",
+    "v2"
+  ]
 }

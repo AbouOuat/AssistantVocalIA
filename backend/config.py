@@ -36,6 +36,10 @@ class Settings:
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # CI / tests : court-circuite les appels OpenAI (réponses simulées déterministes).
+    # Ne jamais activer en prod.
+    FAKE_LLM: bool = os.getenv("JARVIS_FAKE_LLM", "false").lower() == "true"
+
     # ── Profil client ──────────────────────────────────────────
     CLIENT_NAME: str = os.getenv("CLIENT_NAME", "Abo")
     CLIENT_TIMEZONE: str = os.getenv("CLIENT_TIMEZONE", "Europe/Paris")

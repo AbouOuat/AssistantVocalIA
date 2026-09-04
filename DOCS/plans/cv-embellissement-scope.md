@@ -93,11 +93,12 @@ non pinnée est la cause racine (déjà cassé smart-agent en juin, cf. `aa088eb
    `backend/services/ai_service.py` (→ `"non renseigné"`), `docker-compose.yml` (défauts n8n vidés),
    `workflows/*classifier*-v2.json` (fallbacks JS `|| 'ouat.abou34@…'` → `|| ''`). `grep` global vide.
 
-**État au 2026-09-04** : Étape 0 + Étape 1/Path B closes (repo + prod). Reste côté **Coolify** (toi) :
-- `WORKFLOW_VERSION=v1` sur le service `backend` + redeploy ;
-- `CLIENT_GMAIL`, `CLIENT_SUMMARY_RECIPIENT`, `CLIENT_CR_RECIPIENT`, `OPENWEATHER_API_KEY`,
-  `CLIENT_CALENDAR_ID` sur le service `n8n` (constatés vides dans le conteneur) + redeploy n8n
-  (qui appliquera aussi le pin `2.22.5`).
+**État au 2026-09-04** : Étape 0 + Étape 1/Path B closes (repo + prod).
+- ✅ `WORKFLOW_VERSION=v1` : cohérent partout — `config.py`, `.env(.example)`, `docker-compose.yml` backend,
+  **et prod backend (Coolify) confirmé v1 par l'utilisateur le 2026-09-04**.
+- ⬜ Reste côté **Coolify** (toi) : `CLIENT_GMAIL`, `CLIENT_SUMMARY_RECIPIENT`, `CLIENT_CR_RECIPIENT`,
+  `OPENWEATHER_API_KEY`, `CLIENT_CALENDAR_ID` sur le service `n8n` (constatés vides dans le conteneur)
+  + redeploy n8n (qui appliquera aussi le pin `2.22.5`).
 
 ---
 
@@ -212,15 +213,25 @@ Aujourd'hui : uniquement `continueOnFail: true` (dégradation), aucun Error Trig
 
 ---
 
-## T5 — CI GitHub Actions  ⬜
+## T5 — CI GitHub Actions  🟡 (repo fait, CI verte à confirmer)
 
-**Pourquoi** : la ligne Outils du bloc Jarvis mentionne `GitHub Actions` ; aucun `.github/workflows/` n'existe.
+**Pourquoi** : la ligne Outils du bloc Jarvis mentionne `GitHub Actions` ; aucun `.github/workflows/` n'existait.
 
-**À faire**
-- `.github/workflows/ci.yml` : lint (`ruff`), `pytest` backend, Playwright E2E, `docker build` des 3 images.
-- Optionnel : hook de déploiement Coolify sur push `main`.
+**Fait (2026-09-04)** — `.github/workflows/ci.yml`, 4 jobs sur `push`/`pull_request` vers `main` :
+- **checks** : `ruff check backend/` (config `pyproject.toml` — `select = ["F","E9"]`, à élargir) + `npm ci`
+  + `next lint` (ESLint, `.eslintrc.json` ajouté) + `tsc --noEmit` + `next build`.
+- **backend-tests** : services postgres + redis, `pip install -r requirements-dev.txt`, `pytest -q`
+  (`backend/tests/test_smoke.py` : import app, config, Named Scopes, `FAKE_LLM`, `/health`, `/api/settings`).
+- **e2e** : services postgres + redis, backend lancé avec `JARVIS_FAKE_LLM=true` (réponses simulées
+  déterministes — nouveau flag `settings.FAKE_LLM`), Playwright boote `next dev` et joue
+  `voice-connection.spec.ts` + `fallback.spec.ts`.
+- **docker-build** : `docker build` des 3 images (backend / frontend / nginx), sans push.
 
-**Fait quand** : CI verte sur une PR ; badge/statut visible.
+Local : `ruff`/pyflakes propre (F401 + f-strings sans placeholder corrigés dans `main.py`/`auth_service.py`),
+`next lint` + `tsc` + `next build` OK, `pytest` 5 passed / 2 skipped.
+
+**Fait quand** : 1er run CI vert sur une PR (à pousser). Puis élargir `ruff` (`E,W,I,UP,B`) + ajouter
+les 3 specs Playwright manquantes (`morning-briefing`, `smart-agent`, `memory-scopes`).
 
 **Effort** : ~0,5 j
 

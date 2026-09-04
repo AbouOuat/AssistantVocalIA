@@ -1,13 +1,11 @@
 """Jarvis Backend â€” FastAPI + WebSocket pipeline complet."""
 
-import asyncio
 import json
 import logging
 import os
-import re
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
 from pydantic import BaseModel
@@ -17,7 +15,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 from backend.services.ai_service import (
     ConversationContext,
-    chat_completion,
     chat_completion_stream,
     chat_completion_with_tools,
 )
@@ -26,7 +23,6 @@ from backend.services.voice_service import (
     check_realtime_access,
     decode_audio_base64,
     encode_audio_base64,
-    process_voice_message,
     transcribe_audio,
     text_to_speech,
 )
@@ -753,7 +749,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                         if result and result.get("ok"):
                             sent_to = result.get("sent_to", settings.CLIENT_CR_RECIPIENT)
                             chat_ok = f"âœ… Compte-rendu envoyÃ© Ã  **{sent_to}**."
-                            vocal_ok = f"Compte-rendu envoyÃ© avec succÃ¨s."
+                            vocal_ok = "Compte-rendu envoyÃ© avec succÃ¨s."
                         else:
                             chat_ok = "âš ï¸ Envoi Ã©chouÃ© â€” vÃ©rifie le workflow n8n send-outlook-email."
                             vocal_ok = "L'envoi a Ã©chouÃ©. VÃ©rifie le workflow n8n."
@@ -855,7 +851,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     f"{m['role']}: {m['content'][:80]}" for m in ctx.history[-10:]
                 ]
                 summary_prompt = (
-                    f"RÃ©sume cette session en 3-5 bullets (dÃ©cisions, tÃ¢ches, mÃ©mos):\n"
+                    "RÃ©sume cette session en 3-5 bullets (dÃ©cisions, tÃ¢ches, mÃ©mos):\n"
                     f"Historique: {history_preview}\n"
                     f"MÃ©moire: {all_memory}"
                 )

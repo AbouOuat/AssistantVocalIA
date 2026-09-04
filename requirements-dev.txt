@@ -1,0 +1,6 @@
+# Outils dev / CI — non installés dans l'image de prod (Dockerfile.backend).
+-r requirements_backend.txt
+
+ruff==0.6.9
+pytest==8.3.3
+pytest-asyncio==0.24.0

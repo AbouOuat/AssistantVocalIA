@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["tmp", ".next", "node_modules", "workflows"]
+
+[tool.ruff.lint]
+# Démarrage volontairement resserré : pyflakes (bugs réels : imports/vars inutilisés,
+# noms non définis) + erreurs de syntaxe. À élargir (E, W, I, UP, B) une fois la base au propre.
+select = ["F", "E9"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]

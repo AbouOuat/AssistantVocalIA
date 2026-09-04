@@ -408,6 +408,11 @@ class ConversationContext:
         self.history = []
 
 
+def _fake_reply(user_message: str) -> str:
+    """Réponse simulée déterministe pour CI/tests (JARVIS_FAKE_LLM=true)."""
+    return f"Réponse simulée (mode test) — reçu : {user_message[:120]}"
+
+
 async def chat_completion(
     user_message: str,
     context: ConversationContext,
@@ -415,6 +420,10 @@ async def chat_completion(
     extra_system: str | None = None,
 ) -> str:
     context.add_message("user", user_message)
+    if settings.FAKE_LLM:
+        reply = _fake_reply(user_message)
+        context.add_message("assistant", reply)
+        return reply
     messages = context.get_messages()
     if extra_system:
         messages.insert(1, {"role": "system", "content": extra_system})
@@ -443,6 +452,12 @@ async def chat_completion_with_tools(
     on_stream_chunk: async (chunk: str) -> None — streamer les tokens si pas de tool
     """
     context.add_message("user", user_message)
+    if settings.FAKE_LLM:
+        reply = _fake_reply(user_message)
+        if on_stream_chunk:
+            await on_stream_chunk(reply)
+        context.add_message("assistant", reply)
+        return reply, False
     messages = list(context.get_messages())
     tools_called = False
 
@@ -556,6 +571,11 @@ async def chat_completion_stream(
     """Yield text chunks from GPT-4o (streaming)."""
     context.add_message("user", user_message)
     full_response = ""
+    if settings.FAKE_LLM:
+        reply = _fake_reply(user_message)
+        context.add_message("assistant", reply)
+        yield reply
+        return
     messages = context.get_messages()
     if extra_system:
         messages.insert(1, {"role": "system", "content": extra_system})

@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 from typing import Optional
-import os
 import jwt
 from backend.config import get_settings
 from backend.models import User, SessionLocal, engine, Base

@@ -20,8 +20,8 @@ def _get_client() -> AsyncOpenAI:
 
 def _build_system_prompt() -> str:
     from datetime import date, timedelta
-    gmail = settings.CLIENT_GMAIL or os.getenv("GMAIL_USER_EMAIL", "ouat.abou34@gmail.com")
-    outlook = settings.CLIENT_OUTLOOK_MAILBOX or "ouat.abou34@outlook.fr"
+    gmail = settings.CLIENT_GMAIL or os.getenv("GMAIL_USER_EMAIL", "") or "non renseigné"
+    outlook = settings.CLIENT_OUTLOOK_MAILBOX or "non renseigné"
     name = settings.CLIENT_NAME
     today = date.today()
     tomorrow = today + timedelta(days=1)

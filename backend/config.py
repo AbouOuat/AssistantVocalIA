@@ -70,8 +70,12 @@ class Settings:
     EMAIL_ANALYSIS_CACHE_TTL: int = int(os.getenv("EMAIL_ANALYSIS_CACHE_TTL", "86400"))
     EMAIL_INBOX_CACHE_TTL: int = int(os.getenv("EMAIL_INBOX_CACHE_TTL", "120"))
 
-    # Version workflows n8n — v1 = custom JS, v2 = LangChain natif
-    WORKFLOW_VERSION: str = os.getenv("WORKFLOW_VERSION", "v2")
+    # Version workflows n8n de classification d'e-mails.
+    # v1 = appel OpenAI via httpRequest (robuste, tourne en prod).
+    # v2 = nœuds LangChain n8n — CASSÉ en prod depuis août 2026 (incompat. node lmChatOpenAi).
+    # Défaut = v1 tant que v2 n'est pas réparé (cf. DOCS/plans/cv-embellissement-scope.md Étape 1 / Path B).
+    # Doit rester cohérent avec docker-compose.yml et l'env Coolify.
+    WORKFLOW_VERSION: str = os.getenv("WORKFLOW_VERSION", "v1")
 
 
 def get_settings() -> Settings:

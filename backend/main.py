@@ -746,12 +746,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                             "audio": encode_audio_base64(await text_to_speech("Envoi en cours...") or b""),
                         })
                         result = await call_webhook("send-outlook-email", {
-                            "to": "ouat.abou34@outlook.fr",
+                            "to": settings.CLIENT_CR_RECIPIENT,
                             "subject": dstate.get("title", "Compte-rendu de rÃ©union"),
                             "body": dstate.get("draft", ""),
                         })
                         if result and result.get("ok"):
-                            sent_to = result.get("sent_to", "ouat.abou34@outlook.fr")
+                            sent_to = result.get("sent_to", settings.CLIENT_CR_RECIPIENT)
                             chat_ok = f"âœ… Compte-rendu envoyÃ© Ã  **{sent_to}**."
                             vocal_ok = f"Compte-rendu envoyÃ© avec succÃ¨s."
                         else:

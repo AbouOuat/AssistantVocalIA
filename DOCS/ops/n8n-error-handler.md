@@ -17,13 +17,18 @@ id d'exécution, lien.
 
 ## Déploiement (fait le 2026-09-04 via n8n API)
 
-1. Import `error-handler.json` → workflow prod (credential Gmail re-liée : `ZO3kLaKLb2hdHVw5`
-   « Gmail account »), puis activation.
-2. Affectation comme **Error Workflow** sur les 16 workflows actifs (hors `error-handler`
-   lui-même) : `PUT /api/v1/workflows/{id}` avec
-   `settings = { executionOrder: "v1", errorWorkflow: "<error-handler-id>" }`.
-3. Vérification : workflow jetable `_test-error-handler` (webhook → `throw`) affecté à
-   l'error handler, POST du webhook → e-mail reçu, puis suppression du jetable.
+1. ✅ Import `error-handler.json` → **`j8OJ3Tk1T5hb0fhw`** (credential Gmail re-liée :
+   `ZO3kLaKLb2hdHVw5` « Gmail account »), activé.
+2. ✅ Affecté comme **Error Workflow** sur les **16 workflows actifs** (hors `error-handler`) :
+   `PUT /api/v1/workflows/{id}` avec `settings = { executionOrder: "v1", errorWorkflow: "j8OJ3Tk1T5hb0fhw" }`.
+   Snapshots pré-affectation : `workflows/_prod-snapshot-2026-09-04/t3-error-workflow/`.
+3. ✅ Test : workflow jetable webhook→`throw` affecté à l'error handler, POST webhook → exécution
+   `error` → **error-handler déclenché** (`Error Trigger` → `Formater alerte` exécutés, `status: success`),
+   puis jetable supprimé.
+   ⚠️ **E-mail non envoyé** : `Formater alerte` a renvoyé `[]` car `CLIENT_CR_RECIPIENT` /
+   `CLIENT_SUMMARY_RECIPIENT` / `SUMMARY_RECIPIENT_EMAIL` sont **vides dans le conteneur n8n prod**.
+   Le câblage est prouvé ; la livraison de l'e-mail marchera dès que l'une de ces variables sera
+   renseignée dans l'env Coolify + redeploy n8n.
 
 ## Rétablir / retirer
 

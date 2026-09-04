@@ -1,0 +1,418 @@
+{
+ "updatedAt": "2026-06-24T19:27:28.856Z",
+ "createdAt": "2026-06-03T17:41:36.810Z",
+ "id": "uj378ec2n8JtRO8r",
+ "name": "google-calendar-create-event",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "google-calendar-create-event",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "79d7daec-7a42-49c5-a3c2-0faa2e7991f0",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -1040,
+    -400
+   ],
+   "webhookId": "google-calendar-create-event"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst titre = String(body.titre || '').trim();\nconst debut = String(body.debut || '').trim();\nconst fin = String(body.fin || '').trim();\nconst description = String(body.description || '').trim();\nconst lieu = String(body.lieu || '').trim();\nif (!titre || !debut || !fin) {\n  return [{ json: { ok: false, error: 'Champs requis manquants : titre, debut, fin.' } }];\n}\n// Valider que les dates sont parsables\ntry { new Date(debut).toISOString(); new Date(fin).toISOString(); } catch(e) {\n  return [{ json: { ok: false, error: 'Format de date invalide. Utilise ISO 8601 (ex: 2026-06-04T09:00:00).' } }];\n}\nreturn [{ json: { ok: true, titre, debut, fin, description, lieu } }];"
+   },
+   "id": "475adb6a-e37b-45f3-aa20-bb139b2b6c3c",
+   "name": "Valider paramètres",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -800,
+    -400
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 1
+     },
+     "conditions": [
+      {
+       "leftValue": "={{ $json.ok }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "equal"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "a00a25f3-20ae-4281-ac1a-11e26cacf280",
+   "name": "Paramètres OK ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    -560,
+    -400
+   ]
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: false, error: $('Valider paramètres').first().json.error }) }}",
+    "options": {}
+   },
+   "id": "a070beb5-19db-4be9-9d72-d5dacd6f761f",
+   "name": "Répondre - Erreur",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    -320,
+    -544
+   ]
+  },
+  {
+   "parameters": {
+    "calendar": {
+     "__rl": true,
+     "value": "={{ $env.CLIENT_CALENDAR_ID }}",
+     "mode": "id"
+    },
+    "start": "={{ $('Valider paramètres').first().json.debut }}",
+    "end": "={{ $('Valider paramètres').first().json.fin }}",
+    "additionalFields": {
+     "description": "={{ $('Valider paramètres').first().json.description }}",
+     "location": "={{ $('Valider paramètres').first().json.lieu }}",
+     "summary": "={{ $('Valider paramètres').first().json.titre }}"
+    }
+   },
+   "id": "afc82a68-00ad-43e4-8b84-be2ea6442347",
+   "name": "Google Calendar - Créer événement",
+   "type": "n8n-nodes-base.googleCalendar",
+   "typeVersion": 1.1,
+   "position": [
+    -320,
+    -304
+   ],
+   "credentials": {
+    "googleCalendarOAuth2Api": {
+     "id": "b6DN69T7tToNOU4C",
+     "name": "Google Calendar Jarvis"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: !$json.error, event_id: $json.id, titre: $('Valider paramètres').first().json.titre, debut: $('Valider paramètres').first().json.debut, fin: $('Valider paramètres').first().json.fin, html_link: $json.htmlLink, error: $json.error || null }) }}",
+    "options": {}
+   },
+   "id": "e22b2f8c-1bc3-4acf-baa6-ca53c0969e0f",
+   "name": "Répondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    -80,
+    -304
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Valider paramètres",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Valider paramètres": {
+   "main": [
+    [
+     {
+      "node": "Paramètres OK ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Paramètres OK ?": {
+   "main": [
+    [
+     {
+      "node": "Répondre - Erreur",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Google Calendar - Créer événement",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Google Calendar - Créer événement": {
+   "main": [
+    [
+     {
+      "node": "Répondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "31dbb9b7-81d4-4a8d-9b99-b7cf51d76f28",
+ "activeVersionId": "31dbb9b7-81d4-4a8d-9b99-b7cf51d76f28",
+ "versionCounter": 18,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-03T17:41:36.817Z",
+   "createdAt": "2026-06-03T17:41:36.817Z",
+   "role": "workflow:owner",
+   "workflowId": "uj378ec2n8JtRO8r",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-24T19:27:47.000Z",
+  "createdAt": "2026-06-24T19:27:28.857Z",
+  "versionId": "31dbb9b7-81d4-4a8d-9b99-b7cf51d76f28",
+  "workflowId": "uj378ec2n8JtRO8r",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "google-calendar-create-event",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "79d7daec-7a42-49c5-a3c2-0faa2e7991f0",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     -1040,
+     -400
+    ],
+    "webhookId": "google-calendar-create-event"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst titre = String(body.titre || '').trim();\nconst debut = String(body.debut || '').trim();\nconst fin = String(body.fin || '').trim();\nconst description = String(body.description || '').trim();\nconst lieu = String(body.lieu || '').trim();\nif (!titre || !debut || !fin) {\n  return [{ json: { ok: false, error: 'Champs requis manquants : titre, debut, fin.' } }];\n}\n// Valider que les dates sont parsables\ntry { new Date(debut).toISOString(); new Date(fin).toISOString(); } catch(e) {\n  return [{ json: { ok: false, error: 'Format de date invalide. Utilise ISO 8601 (ex: 2026-06-04T09:00:00).' } }];\n}\nreturn [{ json: { ok: true, titre, debut, fin, description, lieu } }];"
+    },
+    "id": "475adb6a-e37b-45f3-aa20-bb139b2b6c3c",
+    "name": "Valider paramètres",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     -800,
+     -400
+    ]
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": false,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 1
+      },
+      "conditions": [
+       {
+        "leftValue": "={{ $json.ok }}",
+        "rightValue": true,
+        "operator": {
+         "type": "boolean",
+         "operation": "equal"
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "a00a25f3-20ae-4281-ac1a-11e26cacf280",
+    "name": "Paramètres OK ?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2,
+    "position": [
+     -560,
+     -400
+    ]
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: false, error: $('Valider paramètres').first().json.error }) }}",
+     "options": {}
+    },
+    "id": "a070beb5-19db-4be9-9d72-d5dacd6f761f",
+    "name": "Répondre - Erreur",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     -320,
+     -544
+    ]
+   },
+   {
+    "parameters": {
+     "calendar": {
+      "__rl": true,
+      "value": "={{ $env.CLIENT_CALENDAR_ID }}",
+      "mode": "id"
+     },
+     "start": "={{ $('Valider paramètres').first().json.debut }}",
+     "end": "={{ $('Valider paramètres').first().json.fin }}",
+     "additionalFields": {
+      "description": "={{ $('Valider paramètres').first().json.description }}",
+      "location": "={{ $('Valider paramètres').first().json.lieu }}",
+      "summary": "={{ $('Valider paramètres').first().json.titre }}"
+     }
+    },
+    "id": "afc82a68-00ad-43e4-8b84-be2ea6442347",
+    "name": "Google Calendar - Créer événement",
+    "type": "n8n-nodes-base.googleCalendar",
+    "typeVersion": 1.1,
+    "position": [
+     -320,
+     -304
+    ],
+    "credentials": {
+     "googleCalendarOAuth2Api": {
+      "id": "b6DN69T7tToNOU4C",
+      "name": "Google Calendar Jarvis"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: !$json.error, event_id: $json.id, titre: $('Valider paramètres').first().json.titre, debut: $('Valider paramètres').first().json.debut, fin: $('Valider paramètres').first().json.fin, html_link: $json.htmlLink, error: $json.error || null }) }}",
+     "options": {}
+    },
+    "id": "e22b2f8c-1bc3-4acf-baa6-ca53c0969e0f",
+    "name": "Répondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     -80,
+     -304
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Valider paramètres",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Valider paramètres": {
+    "main": [
+     [
+      {
+       "node": "Paramètres OK ?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Paramètres OK ?": {
+    "main": [
+     [
+      {
+       "node": "Répondre - Erreur",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Google Calendar - Créer événement",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Google Calendar - Créer événement": {
+    "main": [
+     [
+      {
+       "node": "Répondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 31dbb9b7",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-24T19:27:47.062Z",
+    "id": 70,
+    "workflowId": "uj378ec2n8JtRO8r",
+    "versionId": "31dbb9b7-81d4-4a8d-9b99-b7cf51d76f28",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

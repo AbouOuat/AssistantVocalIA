@@ -1,0 +1,280 @@
+{
+ "updatedAt": "2026-06-03T14:29:18.374Z",
+ "createdAt": "2026-06-01T20:07:32.233Z",
+ "id": "7nvyEi0SWcW0o8gg",
+ "name": "send-outlook-email",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "send-outlook-email",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "2b97969b-ba2c-439a-baeb-216304de5011",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    928,
+    -1072
+   ],
+   "webhookId": "send-outlook-email"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || 'Message de Jarvis').trim();\nconst content = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to) {\n  return [{ json: { ok: false, error: 'Destinataire manquant' } }];\n}\nreturn [{ json: { to, subject, content, replyToId } }];"
+   },
+   "id": "44eec93f-bfe9-4fff-afab-908ce4111ef1",
+   "name": "Valider parametres",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1168,
+    -1072
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "oAuth2Api",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ {\n  message: {\n    subject: $json.subject,\n    body: { contentType: 'Text', content: $json.content },\n    toRecipients: [{ emailAddress: { address: $json.to } }]\n  },\n  saveToSentItems: true\n} }}",
+    "options": {}
+   },
+   "id": "0d007af4-da7e-49bc-8164-5f938d148c8c",
+   "name": "Graph - Envoyer email",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1408,
+    -1072
+   ],
+   "credentials": {
+    "oAuth2Api": {
+     "id": "cXwgnsn2JzgIpzFd",
+     "name": "Connect_Outlook_ouat"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: $json.statusCode === undefined || $json.statusCode === 202, sent_to: $('Valider parametres').first().json.to, subject: $('Valider parametres').first().json.subject }) }}",
+    "options": {}
+   },
+   "id": "89176b8f-8e52-4a1f-89f6-ff1453678459",
+   "name": "Repondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    1648,
+    -1072
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Valider parametres",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Valider parametres": {
+   "main": [
+    [
+     {
+      "node": "Graph - Envoyer email",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Graph - Envoyer email": {
+   "main": [
+    [
+     {
+      "node": "Repondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": null,
+ "pinData": {},
+ "versionId": "1b231917-45af-4f1a-84f5-c69e24a13554",
+ "activeVersionId": "1b231917-45af-4f1a-84f5-c69e24a13554",
+ "versionCounter": 10,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-01T20:07:32.238Z",
+   "createdAt": "2026-06-01T20:07:32.238Z",
+   "role": "workflow:owner",
+   "workflowId": "7nvyEi0SWcW0o8gg",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-08-31T14:22:50.000Z",
+  "createdAt": "2026-06-03T14:29:18.375Z",
+  "versionId": "1b231917-45af-4f1a-84f5-c69e24a13554",
+  "workflowId": "7nvyEi0SWcW0o8gg",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "send-outlook-email",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "2b97969b-ba2c-439a-baeb-216304de5011",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     928,
+     -1072
+    ],
+    "webhookId": "send-outlook-email"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || 'Message de Jarvis').trim();\nconst content = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to) {\n  return [{ json: { ok: false, error: 'Destinataire manquant' } }];\n}\nreturn [{ json: { to, subject, content, replyToId } }];"
+    },
+    "id": "44eec93f-bfe9-4fff-afab-908ce4111ef1",
+    "name": "Valider parametres",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1168,
+     -1072
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "method": "POST",
+     "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+     "authentication": "genericCredentialType",
+     "genericAuthType": "oAuth2Api",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={{ {\n  message: {\n    subject: $json.subject,\n    body: { contentType: 'Text', content: $json.content },\n    toRecipients: [{ emailAddress: { address: $json.to } }]\n  },\n  saveToSentItems: true\n} }}",
+     "options": {}
+    },
+    "id": "0d007af4-da7e-49bc-8164-5f938d148c8c",
+    "name": "Graph - Envoyer email",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1408,
+     -1072
+    ],
+    "credentials": {
+     "oAuth2Api": {
+      "id": "cXwgnsn2JzgIpzFd",
+      "name": "Connect_Outlook_ouat"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: $json.statusCode === undefined || $json.statusCode === 202, sent_to: $('Valider parametres').first().json.to, subject: $('Valider parametres').first().json.subject }) }}",
+     "options": {}
+    },
+    "id": "89176b8f-8e52-4a1f-89f6-ff1453678459",
+    "name": "Repondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     1648,
+     -1072
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Valider parametres",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Valider parametres": {
+    "main": [
+     [
+      {
+       "node": "Graph - Envoyer email",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Graph - Envoyer email": {
+    "main": [
+     [
+      {
+       "node": "Repondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 1b231917",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-08-31T14:22:50.727Z",
+    "id": 96,
+    "workflowId": "7nvyEi0SWcW0o8gg",
+    "versionId": "1b231917-45af-4f1a-84f5-c69e24a13554",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

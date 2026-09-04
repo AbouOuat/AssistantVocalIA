@@ -1,0 +1,358 @@
+{
+ "updatedAt": "2026-06-03T08:56:19.874Z",
+ "createdAt": "2026-06-02T20:07:08.188Z",
+ "id": "ttFagGUvW9zXwiku",
+ "name": "telegram-bot",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "updates": [
+     "message"
+    ],
+    "additionalFields": {}
+   },
+   "id": "e610c9dc-72f0-4167-9c8c-417f42051fa1",
+   "name": "Message Telegram",
+   "type": "n8n-nodes-base.telegramTrigger",
+   "typeVersion": 1,
+   "position": [
+    368,
+    -320
+   ],
+   "webhookId": "telegram-jarvis",
+   "credentials": {
+    "telegramApi": {
+     "id": "2eYIQNs1zgDy76a0",
+     "name": "Jarvis Telegram Bot"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "jsCode": "const msg = $input.first().json;\nconst text = msg.message?.text || '';\nconst chat_id = msg.message?.chat?.id;\nconst from = msg.message?.from?.first_name || 'Inconnu';\nif (!text || !chat_id) return [];\nreturn [{ json: { text, chat_id, from } }];"
+   },
+   "id": "2e85b8d0-8e12-476f-9c68-a8090e80255e",
+   "name": "Extraire message",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    592,
+    -320
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ ($env.BACKEND_URL || 'http://backend:8000') + '/api/chat' }}",
+    "sendBody": true,
+    "bodyParameters": {
+     "parameters": [
+      {
+       "name": "text",
+       "value": "={{ $json.text }}"
+      }
+     ]
+    },
+    "options": {
+     "timeout": 30000
+    }
+   },
+   "id": "217ed04f-092c-4320-b5d1-532aad53539a",
+   "name": "Appeler Jarvis",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4,
+   "position": [
+    816,
+    -320
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const jarvisResp = $('Appeler Jarvis').first().json;\nconst chatId = $('Extraire message').first().json.chat_id;\nconst response = jarvisResp.response || jarvisResp.detail || 'Erreur — Jarvis est injoignable.';\nconst MAX = 4096;\nconst chunks = [];\nfor (let i = 0; i < response.length; i += MAX) {\n  chunks.push({ json: { chat_id: chatId, text: response.slice(i, i + MAX) } });\n}\nreturn chunks.length ? chunks : [{ json: { chat_id: chatId, text: 'Erreur — réponse vide.' } }];"
+   },
+   "id": "a99bcd59-3ab5-416a-af9b-64838c93213d",
+   "name": "Préparer réponse",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1040,
+    -320
+   ]
+  },
+  {
+   "parameters": {
+    "chatId": "={{ $json.chat_id }}",
+    "text": "={{ $json.text }}",
+    "additionalFields": {
+     "parse_mode": "Markdown"
+    }
+   },
+   "id": "c66acb10-dcf6-47e9-939c-20542f033e4e",
+   "name": "Répondre sur Telegram",
+   "type": "n8n-nodes-base.telegram",
+   "typeVersion": 1,
+   "position": [
+    1248,
+    -320
+   ],
+   "webhookId": "292c116c-b1e4-46ca-972f-603fadb6682f",
+   "credentials": {
+    "telegramApi": {
+     "id": "2eYIQNs1zgDy76a0",
+     "name": "Jarvis Telegram Bot"
+    }
+   }
+  }
+ ],
+ "connections": {
+  "Message Telegram": {
+   "main": [
+    [
+     {
+      "node": "Extraire message",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Extraire message": {
+   "main": [
+    [
+     {
+      "node": "Appeler Jarvis",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Appeler Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Préparer réponse",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Préparer réponse": {
+   "main": [
+    [
+     {
+      "node": "Répondre sur Telegram",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "e39614b6-1d93-4917-81bb-182b0dbf5d2f",
+ "activeVersionId": "e39614b6-1d93-4917-81bb-182b0dbf5d2f",
+ "versionCounter": 3,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-02T20:07:08.191Z",
+   "createdAt": "2026-06-02T20:07:08.191Z",
+   "role": "workflow:owner",
+   "workflowId": "ttFagGUvW9zXwiku",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-03T08:56:41.000Z",
+  "createdAt": "2026-06-03T08:56:19.875Z",
+  "versionId": "e39614b6-1d93-4917-81bb-182b0dbf5d2f",
+  "workflowId": "ttFagGUvW9zXwiku",
+  "nodes": [
+   {
+    "parameters": {
+     "updates": [
+      "message"
+     ],
+     "additionalFields": {}
+    },
+    "id": "e610c9dc-72f0-4167-9c8c-417f42051fa1",
+    "name": "Message Telegram",
+    "type": "n8n-nodes-base.telegramTrigger",
+    "typeVersion": 1,
+    "position": [
+     368,
+     -320
+    ],
+    "webhookId": "telegram-jarvis",
+    "credentials": {
+     "telegramApi": {
+      "id": "2eYIQNs1zgDy76a0",
+      "name": "Jarvis Telegram Bot"
+     }
+    }
+   },
+   {
+    "parameters": {
+     "jsCode": "const msg = $input.first().json;\nconst text = msg.message?.text || '';\nconst chat_id = msg.message?.chat?.id;\nconst from = msg.message?.from?.first_name || 'Inconnu';\nif (!text || !chat_id) return [];\nreturn [{ json: { text, chat_id, from } }];"
+    },
+    "id": "2e85b8d0-8e12-476f-9c68-a8090e80255e",
+    "name": "Extraire message",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     592,
+     -320
+    ]
+   },
+   {
+    "parameters": {
+     "method": "POST",
+     "url": "={{ ($env.BACKEND_URL || 'http://backend:8000') + '/api/chat' }}",
+     "sendBody": true,
+     "bodyParameters": {
+      "parameters": [
+       {
+        "name": "text",
+        "value": "={{ $json.text }}"
+       }
+      ]
+     },
+     "options": {
+      "timeout": 30000
+     }
+    },
+    "id": "217ed04f-092c-4320-b5d1-532aad53539a",
+    "name": "Appeler Jarvis",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4,
+    "position": [
+     816,
+     -320
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "const jarvisResp = $('Appeler Jarvis').first().json;\nconst chatId = $('Extraire message').first().json.chat_id;\nconst response = jarvisResp.response || jarvisResp.detail || 'Erreur — Jarvis est injoignable.';\nconst MAX = 4096;\nconst chunks = [];\nfor (let i = 0; i < response.length; i += MAX) {\n  chunks.push({ json: { chat_id: chatId, text: response.slice(i, i + MAX) } });\n}\nreturn chunks.length ? chunks : [{ json: { chat_id: chatId, text: 'Erreur — réponse vide.' } }];"
+    },
+    "id": "a99bcd59-3ab5-416a-af9b-64838c93213d",
+    "name": "Préparer réponse",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1040,
+     -320
+    ]
+   },
+   {
+    "parameters": {
+     "chatId": "={{ $json.chat_id }}",
+     "text": "={{ $json.text }}",
+     "additionalFields": {
+      "parse_mode": "Markdown"
+     }
+    },
+    "id": "c66acb10-dcf6-47e9-939c-20542f033e4e",
+    "name": "Répondre sur Telegram",
+    "type": "n8n-nodes-base.telegram",
+    "typeVersion": 1,
+    "position": [
+     1248,
+     -320
+    ],
+    "webhookId": "292c116c-b1e4-46ca-972f-603fadb6682f",
+    "credentials": {
+     "telegramApi": {
+      "id": "2eYIQNs1zgDy76a0",
+      "name": "Jarvis Telegram Bot"
+     }
+    }
+   }
+  ],
+  "connections": {
+   "Message Telegram": {
+    "main": [
+     [
+      {
+       "node": "Extraire message",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Extraire message": {
+    "main": [
+     [
+      {
+       "node": "Appeler Jarvis",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Appeler Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Préparer réponse",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Préparer réponse": {
+    "main": [
+     [
+      {
+       "node": "Répondre sur Telegram",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version e39614b6",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-03T08:56:41.413Z",
+    "id": 18,
+    "workflowId": "ttFagGUvW9zXwiku",
+    "versionId": "e39614b6-1d93-4917-81bb-182b0dbf5d2f",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

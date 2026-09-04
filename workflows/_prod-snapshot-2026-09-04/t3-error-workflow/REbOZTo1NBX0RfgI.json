@@ -1,0 +1,555 @@
+{
+ "updatedAt": "2026-09-01T17:16:34.354Z",
+ "createdAt": "2026-06-01T09:33:04.557Z",
+ "id": "REbOZTo1NBX0RfgI",
+ "name": "smart-agent",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "smart-agent",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "daa8cf8f-4384-473a-8560-a4593aa027c7",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -4288,
+    -1936
+   ],
+   "webhookId": "smart-agent"
+  },
+  {
+   "parameters": {
+    "jsCode": "const notes = $input.first().json.body?.notes || '';\nconst payload = {\n  model: 'gpt-4o',\n  temperature: 0.3,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es Jarvis, expert en productivite. Analyse les notes et genere un plan d action. Reponds UNIQUEMENT en JSON valide avec : action_plan (array de strings, 3-5 etapes prioritisees), email_draft (objet {subject, body} ou null si pas necessaire), summary (string, 1 phrase).'\n    },\n    {\n      role: 'user',\n      content: 'Analyse ces notes :\\n\\n' + notes\n    }\n  ]\n};\nreturn [{ json: { body: JSON.stringify(payload), notes } }];"
+   },
+   "id": "4ee18585-ac68-47c8-ae15-9bc893e3a241",
+   "name": "Préparer requête",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -4048,
+    -1936
+   ]
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "openAiApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.body }}",
+    "options": {}
+   },
+   "id": "428ec31a-5f02-4802-99d4-a95dedde27a4",
+   "name": "Analyser avec GPT-4o",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4,
+   "position": [
+    -3808,
+    -1936
+   ],
+   "credentials": {
+    "openAiApi": {
+     "id": "aNQ7WpgQ7Tm2YyGg",
+     "name": "OpenAI account"
+    },
+    "httpHeaderAuth": {
+     "id": "F99p27Ao9ucj5aeX",
+     "name": "Header Auth account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "let parsed;\ntry {\n  const content = $json.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — reessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse echouee.' };\n}\nreturn [{ json: parsed }];"
+   },
+   "id": "36944272-bcf9-4880-8bfa-8a771a68b8da",
+   "name": "Parser la réponse",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -3568,
+    -1936
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 1
+     },
+     "conditions": [
+      {
+       "leftValue": "={{ $json.email_draft !== null && $json.email_draft !== undefined && typeof $json.email_draft === 'object' }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "equal"
+       },
+       "id": "2f375b15-b433-400e-808b-85992cdf0ed5"
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "e7191850-5a4e-4d67-aadb-1385cf642522",
+   "name": "Email à envoyer ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    -3328,
+    -1936
+   ]
+  },
+  {
+   "parameters": {
+    "sendTo": "={{ $('Webhook').first().json.body.recipient_email || 'ouat.abou34@gmail.com' }}",
+    "subject": "={{ $('Parser la réponse').first().json.email_draft.subject }}",
+    "emailType": "text",
+    "message": "={{ $('Parser la réponse').first().json.email_draft.body }}",
+    "options": {}
+   },
+   "id": "29567822-bd21-483e-b447-ddeb51d0ddd8",
+   "name": "Envoyer email draft",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    -3088,
+    -2048
+   ],
+   "webhookId": "1740775d-b69f-4e30-9785-6db3c2c3034b",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ action_plan: $('Parser la réponse').first().json.action_plan, summary: $('Parser la réponse').first().json.summary, email_sent: !!$('Parser la réponse').first().json.email_draft }) }}",
+    "options": {}
+   },
+   "id": "079746fc-e2a8-4783-89f6-75582ff73e91",
+   "name": "Répondre",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    -2848,
+    -1936
+   ]
+  },
+  {
+   "parameters": {},
+   "type": "n8n-nodes-base.manualTrigger",
+   "typeVersion": 1,
+   "position": [
+    -4304,
+    -1776
+   ],
+   "id": "3f17f45b-3914-4ca9-8ae4-4b6f55bdc556",
+   "name": "When clicking ‘Execute workflow’"
+  }
+ ],
+ "connections": {
+  "Webhook": {
+   "main": [
+    [
+     {
+      "node": "Préparer requête",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Préparer requête": {
+   "main": [
+    [
+     {
+      "node": "Analyser avec GPT-4o",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Analyser avec GPT-4o": {
+   "main": [
+    [
+     {
+      "node": "Parser la réponse",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Parser la réponse": {
+   "main": [
+    [
+     {
+      "node": "Email à envoyer ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Email à envoyer ?": {
+   "main": [
+    [
+     {
+      "node": "Envoyer email draft",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Répondre",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Envoyer email draft": {
+   "main": [
+    [
+     {
+      "node": "Répondre",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "When clicking ‘Execute workflow’": {
+   "main": [
+    [
+     {
+      "node": "Préparer requête",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "a6bfa5d0-ddc5-4d94-a598-123cd9cebbec",
+ "activeVersionId": "1b2af823-4393-49f8-9e58-862d43534e71",
+ "versionCounter": 39,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-01T09:33:04.561Z",
+   "createdAt": "2026-06-01T09:33:04.561Z",
+   "role": "workflow:owner",
+   "workflowId": "REbOZTo1NBX0RfgI",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-04T09:43:14.000Z",
+  "createdAt": "2026-06-04T09:39:20.527Z",
+  "versionId": "1b2af823-4393-49f8-9e58-862d43534e71",
+  "workflowId": "REbOZTo1NBX0RfgI",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "smart-agent",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "daa8cf8f-4384-473a-8560-a4593aa027c7",
+    "name": "Webhook",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     -4288,
+     -1936
+    ],
+    "webhookId": "smart-agent"
+   },
+   {
+    "parameters": {
+     "jsCode": "const notes = $input.first().json.body?.notes || '';\nconst payload = {\n  model: 'gpt-4o',\n  temperature: 0.3,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es Jarvis, expert en productivite. Analyse les notes et genere un plan d action. Reponds UNIQUEMENT en JSON valide avec : action_plan (array de strings, 3-5 etapes prioritisees), email_draft (objet {subject, body} ou null si pas necessaire), summary (string, 1 phrase).'\n    },\n    {\n      role: 'user',\n      content: 'Analyse ces notes :\\n\\n' + notes\n    }\n  ]\n};\nreturn [{ json: { body: JSON.stringify(payload), notes } }];"
+    },
+    "id": "4ee18585-ac68-47c8-ae15-9bc893e3a241",
+    "name": "Préparer requête",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     -4048,
+     -1936
+    ]
+   },
+   {
+    "parameters": {
+     "method": "POST",
+     "url": "https://api.openai.com/v1/chat/completions",
+     "authentication": "predefinedCredentialType",
+     "nodeCredentialType": "openAiApi",
+     "sendBody": true,
+     "specifyBody": "json",
+     "jsonBody": "={{ $json.body }}",
+     "options": {}
+    },
+    "id": "428ec31a-5f02-4802-99d4-a95dedde27a4",
+    "name": "Analyser avec GPT-4o",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4,
+    "position": [
+     -3808,
+     -1936
+    ],
+    "credentials": {
+     "openAiApi": {
+      "id": "aNQ7WpgQ7Tm2YyGg",
+      "name": "OpenAI account"
+     },
+     "httpHeaderAuth": {
+      "id": "F99p27Ao9ucj5aeX",
+      "name": "Header Auth account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "let parsed;\ntry {\n  const content = $json.choices?.[0]?.message?.content || '{}';\n  parsed = JSON.parse(content);\n} catch(e) {\n  parsed = { action_plan: ['Erreur analyse — reessaie en reformulant tes notes.'], email_draft: null, summary: 'Analyse echouee.' };\n}\nreturn [{ json: parsed }];"
+    },
+    "id": "36944272-bcf9-4880-8bfa-8a771a68b8da",
+    "name": "Parser la réponse",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     -3568,
+     -1936
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "leftValue": "",
+       "typeValidation": "loose",
+       "version": 1
+      },
+      "conditions": [
+       {
+        "leftValue": "={{ $json.email_draft !== null && $json.email_draft !== undefined && typeof $json.email_draft === 'object' }}",
+        "rightValue": true,
+        "operator": {
+         "type": "boolean",
+         "operation": "equal"
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "e7191850-5a4e-4d67-aadb-1385cf642522",
+    "name": "Email à envoyer ?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2,
+    "position": [
+     -3328,
+     -1936
+    ]
+   },
+   {
+    "parameters": {
+     "sendTo": "={{ $('Webhook').first().json.body.recipient_email || 'ouat.abou34@gmail.com' }}",
+     "subject": "={{ $('Parser la réponse').first().json.email_draft.subject }}",
+     "emailType": "text",
+     "message": "={{ $('Parser la réponse').first().json.email_draft.body }}",
+     "options": {}
+    },
+    "id": "29567822-bd21-483e-b447-ddeb51d0ddd8",
+    "name": "Envoyer email draft",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     -3088,
+     -2048
+    ],
+    "webhookId": "1740775d-b69f-4e30-9785-6db3c2c3034b",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ action_plan: $('Parser la réponse').first().json.action_plan, summary: $('Parser la réponse').first().json.summary, email_sent: !!$('Parser la réponse').first().json.email_draft }) }}",
+     "options": {}
+    },
+    "id": "079746fc-e2a8-4783-89f6-75582ff73e91",
+    "name": "Répondre",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     -2848,
+     -1936
+    ]
+   },
+   {
+    "parameters": {},
+    "type": "n8n-nodes-base.manualTrigger",
+    "typeVersion": 1,
+    "position": [
+     -4304,
+     -1776
+    ],
+    "id": "3f17f45b-3914-4ca9-8ae4-4b6f55bdc556",
+    "name": "When clicking ‘Execute workflow’"
+   }
+  ],
+  "connections": {
+   "Webhook": {
+    "main": [
+     [
+      {
+       "node": "Préparer requête",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Préparer requête": {
+    "main": [
+     [
+      {
+       "node": "Analyser avec GPT-4o",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Analyser avec GPT-4o": {
+    "main": [
+     [
+      {
+       "node": "Parser la réponse",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Parser la réponse": {
+    "main": [
+     [
+      {
+       "node": "Email à envoyer ?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Email à envoyer ?": {
+    "main": [
+     [
+      {
+       "node": "Envoyer email draft",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Répondre",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Envoyer email draft": {
+    "main": [
+     [
+      {
+       "node": "Répondre",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "When clicking ‘Execute workflow’": {
+    "main": [
+     [
+      {
+       "node": "Préparer requête",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 1b2af823",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-04T09:43:14.089Z",
+    "id": 46,
+    "workflowId": "REbOZTo1NBX0RfgI",
+    "versionId": "1b2af823-4393-49f8-9e58-862d43534e71",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

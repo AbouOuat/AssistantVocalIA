@@ -202,15 +202,15 @@ Avant : uniquement `continueOnFail` (dégradation), aucun Error Trigger.
 
 **Fait (2026-09-04)**
 - ✅ `workflows/error-handler.json` : `Error Trigger` → `Formater alerte` (Code) → `Gmail - Envoyer alerte`.
-  Destinataire via env uniquement (`CLIENT_CR_RECIPIENT` → `CLIENT_SUMMARY_RECIPIENT` → `SUMMARY_RECIPIENT_EMAIL`),
-  aucun défaut identifiant. Validé n8n MCP (0 erreur). Procédure : `DOCS/ops/n8n-error-handler.md`.
-- ⬜ **Prod** (n8n API, plan à revoir) : importer + activer, affecter comme Error Workflow aux 16
-  workflows actifs, tester via workflow jetable.
-- ⬜ **Coolify** : renseigner `CLIENT_CR_RECIPIENT` (ou `CLIENT_SUMMARY_RECIPIENT`) dans l'env n8n —
-  sinon l'alerte n'a pas de destinataire.
+  Destinataire via env uniquement. Validé n8n MCP. Procédure : `DOCS/ops/n8n-error-handler.md`.
+- ✅ **Prod** : importé + activé (`j8OJ3Tk1T5hb0fhw`), affecté comme Error Workflow aux **16 workflows
+  actifs**. Test jetable (`throw`) → error-handler déclenché (`Error Trigger` + `Formater alerte`
+  exécutés). Snapshots : `workflows/_prod-snapshot-2026-09-04/t3-error-workflow/`.
+- ⬜ **Coolify** : renseigner `CLIENT_CR_RECIPIENT` (ou `CLIENT_SUMMARY_RECIPIENT`) dans l'env n8n +
+  redeploy — sinon `Formater alerte` renvoie `[]` et **aucun e-mail n'est envoyé** (constaté au test).
 
-**Fait quand** : échec provoqué (workflow jetable qui `throw`) → e-mail reçu < 1 min ; Error Workflow
-affecté aux 16 actifs.
+**Fait quand** : ✅ Error Workflow affecté aux 16 actifs + câblage prouvé. ⬜ « e-mail reçu < 1 min »
+= à revalider après la variable d'env Coolify.
 
 **Reste (suite)** : throttling Redis (1 e-mail / workflow / 15 min).
 

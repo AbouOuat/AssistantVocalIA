@@ -1,0 +1,418 @@
+{
+ "updatedAt": "2026-06-02T12:56:46.309Z",
+ "createdAt": "2026-06-01T09:33:32.265Z",
+ "id": "kNgmGqtZg2GF8qR1",
+ "name": "memory-scopes",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "memory",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "032242f0-3e00-4b6a-9ec0-f878e1f784b1",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -464,
+    128
+   ],
+   "webhookId": "memory-scopes"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 1
+     },
+     "conditions": [
+      {
+       "leftValue": "={{ $json.body.operation }}",
+       "rightValue": "set",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "e99d3f57-1aa5-4b9e-ba7d-33341bb972cc",
+   "name": "SET ou GET ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    -240,
+    128
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "set",
+    "key": "={{ 'jarvis:memory:' + $('Webhook').first().json.body.user_id + ':' + $('Webhook').first().json.body.scope + ':' + $('Webhook').first().json.body.key }}",
+    "value": "={{ JSON.stringify($('Webhook').first().json.body.value) }}",
+    "expire": true,
+    "ttl": 2592000
+   },
+   "id": "29fd3f57-baba-410f-9bfd-bbdddc0d4aec",
+   "name": "Redis SET",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    0,
+    0
+   ],
+   "credentials": {
+    "redis": {
+     "id": "dhrCbJKrbetWSX7d",
+     "name": "Redis account"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "operation": "get",
+    "key": "={{ 'jarvis:memory:' + $('Webhook').first().json.body.user_id + ':' + $('Webhook').first().json.body.scope + ':' + $('Webhook').first().json.body.key }}",
+    "options": {}
+   },
+   "id": "22bff921-4fca-402b-a7e0-c8e59ded3c90",
+   "name": "Redis GET",
+   "type": "n8n-nodes-base.redis",
+   "typeVersion": 1,
+   "position": [
+    0,
+    240
+   ],
+   "credentials": {
+    "redis": {
+     "id": "dhrCbJKrbetWSX7d",
+     "name": "Redis account"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, operation: 'set', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key }) }}",
+    "options": {}
+   },
+   "id": "47fda931-0b23-4aa8-bb58-298680b89d94",
+   "name": "Répondre SET",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    240,
+    0
+   ]
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, operation: 'get', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key, value: $json.value ? JSON.parse($json.value) : null }) }}",
+    "options": {}
+   },
+   "id": "9477e2db-6568-4413-8f73-59b58329e06b",
+   "name": "Répondre GET",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    240,
+    240
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook": {
+   "main": [
+    [
+     {
+      "node": "SET ou GET ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "SET ou GET ?": {
+   "main": [
+    [
+     {
+      "node": "Redis SET",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Redis GET",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis SET": {
+   "main": [
+    [
+     {
+      "node": "Répondre SET",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Redis GET": {
+   "main": [
+    [
+     {
+      "node": "Répondre GET",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "fb945fec-2e19-4fb8-9ec2-281fdddf99d3",
+ "activeVersionId": "fb945fec-2e19-4fb8-9ec2-281fdddf99d3",
+ "versionCounter": 3,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-01T09:33:32.275Z",
+   "createdAt": "2026-06-01T09:33:32.275Z",
+   "role": "workflow:owner",
+   "workflowId": "kNgmGqtZg2GF8qR1",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-02T12:56:57.000Z",
+  "createdAt": "2026-06-02T12:56:46.311Z",
+  "versionId": "fb945fec-2e19-4fb8-9ec2-281fdddf99d3",
+  "workflowId": "kNgmGqtZg2GF8qR1",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "memory",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "032242f0-3e00-4b6a-9ec0-f878e1f784b1",
+    "name": "Webhook",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     -464,
+     128
+    ],
+    "webhookId": "memory-scopes"
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": true,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 1
+      },
+      "conditions": [
+       {
+        "leftValue": "={{ $json.body.operation }}",
+        "rightValue": "set",
+        "operator": {
+         "type": "string",
+         "operation": "equals"
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "e99d3f57-1aa5-4b9e-ba7d-33341bb972cc",
+    "name": "SET ou GET ?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2,
+    "position": [
+     -240,
+     128
+    ]
+   },
+   {
+    "parameters": {
+     "operation": "set",
+     "key": "={{ 'jarvis:memory:' + $('Webhook').first().json.body.user_id + ':' + $('Webhook').first().json.body.scope + ':' + $('Webhook').first().json.body.key }}",
+     "value": "={{ JSON.stringify($('Webhook').first().json.body.value) }}",
+     "expire": true,
+     "ttl": 2592000
+    },
+    "id": "29fd3f57-baba-410f-9bfd-bbdddc0d4aec",
+    "name": "Redis SET",
+    "type": "n8n-nodes-base.redis",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ],
+    "credentials": {
+     "redis": {
+      "id": "dhrCbJKrbetWSX7d",
+      "name": "Redis account"
+     }
+    }
+   },
+   {
+    "parameters": {
+     "operation": "get",
+     "key": "={{ 'jarvis:memory:' + $('Webhook').first().json.body.user_id + ':' + $('Webhook').first().json.body.scope + ':' + $('Webhook').first().json.body.key }}",
+     "options": {}
+    },
+    "id": "22bff921-4fca-402b-a7e0-c8e59ded3c90",
+    "name": "Redis GET",
+    "type": "n8n-nodes-base.redis",
+    "typeVersion": 1,
+    "position": [
+     0,
+     240
+    ],
+    "credentials": {
+     "redis": {
+      "id": "dhrCbJKrbetWSX7d",
+      "name": "Redis account"
+     }
+    }
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: true, operation: 'set', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key }) }}",
+     "options": {}
+    },
+    "id": "47fda931-0b23-4aa8-bb58-298680b89d94",
+    "name": "Répondre SET",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     240,
+     0
+    ]
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: true, operation: 'get', scope: $('Webhook').first().json.body.scope, key: $('Webhook').first().json.body.key, value: $json.value ? JSON.parse($json.value) : null }) }}",
+     "options": {}
+    },
+    "id": "9477e2db-6568-4413-8f73-59b58329e06b",
+    "name": "Répondre GET",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     240,
+     240
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook": {
+    "main": [
+     [
+      {
+       "node": "SET ou GET ?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "SET ou GET ?": {
+    "main": [
+     [
+      {
+       "node": "Redis SET",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Redis GET",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Redis SET": {
+    "main": [
+     [
+      {
+       "node": "Répondre SET",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Redis GET": {
+    "main": [
+     [
+      {
+       "node": "Répondre GET",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 1",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-02T12:56:57.452Z",
+    "id": 6,
+    "workflowId": "kNgmGqtZg2GF8qR1",
+    "versionId": "fb945fec-2e19-4fb8-9ec2-281fdddf99d3",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

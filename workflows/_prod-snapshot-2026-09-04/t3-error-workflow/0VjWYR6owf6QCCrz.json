@@ -1,0 +1,404 @@
+{
+ "updatedAt": "2026-06-25T15:03:52.995Z",
+ "createdAt": "2026-06-03T14:43:02.823Z",
+ "id": "0VjWYR6owf6QCCrz",
+ "name": "gmail-draft",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "gmail-draft",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "5a78f558-3742-4850-9a3f-46d2e0ec6a3f",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -640,
+    -304
+   ],
+   "webhookId": "gmail-draft"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || '').trim();\nconst bodyText = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to || !subject || !bodyText) {\n  return [{ json: { ok: false, error: 'Champs manquants : to, subject, body requis.', to, subject } }];\n}\nreturn [{ json: { ok: true, to, subject, bodyText, replyToId } }];"
+   },
+   "id": "e4cc2221-2ea5-4dcb-b093-052d6ea445e4",
+   "name": "Valider paramètres",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    -400,
+    -304
+   ]
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": false,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 1
+     },
+     "conditions": [
+      {
+       "leftValue": "={{ $json.ok }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "equal"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "id": "c9083f8d-8094-4426-8d45-1faf80bc57d0",
+   "name": "Paramètres OK ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    -160,
+    -304
+   ]
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: false, error: $('Valider paramètres').first().json.error }) }}",
+    "options": {}
+   },
+   "id": "f2df5298-d4ff-4b30-9270-73a312164d36",
+   "name": "Répondre - Erreur",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    80,
+    -448
+   ]
+  },
+  {
+   "parameters": {
+    "resource": "draft",
+    "subject": "={{ $json.subject }}",
+    "message": "={{ $json.bodyText }}",
+    "options": {}
+   },
+   "id": "6b980d97-353e-4b54-bcb5-3833564f27f2",
+   "name": "Gmail - Créer brouillon",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    80,
+    -208
+   ],
+   "webhookId": "aabd8f3e-483a-4d61-86ff-e8109b40c7fb",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, draft_id: $json.id, to: $('Valider paramètres').first().json.to, subject: $('Valider paramètres').first().json.subject, message: 'Brouillon Gmail créé avec succès.' }) }}",
+    "options": {}
+   },
+   "id": "6001a626-0170-469a-ad1c-5b6952f62beb",
+   "name": "Répondre - Succès",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    320,
+    -208
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Valider paramètres",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Valider paramètres": {
+   "main": [
+    [
+     {
+      "node": "Paramètres OK ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Paramètres OK ?": {
+   "main": [
+    [
+     {
+      "node": "Répondre - Erreur",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Gmail - Créer brouillon",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Gmail - Créer brouillon": {
+   "main": [
+    [
+     {
+      "node": "Répondre - Succès",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "9bed4bec-9737-48d9-b846-60429824fcb3",
+ "activeVersionId": "9bed4bec-9737-48d9-b846-60429824fcb3",
+ "versionCounter": 9,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-03T14:43:02.826Z",
+   "createdAt": "2026-06-03T14:43:02.826Z",
+   "role": "workflow:owner",
+   "workflowId": "0VjWYR6owf6QCCrz",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-25T15:04:02.000Z",
+  "createdAt": "2026-06-25T15:03:40.594Z",
+  "versionId": "9bed4bec-9737-48d9-b846-60429824fcb3",
+  "workflowId": "0VjWYR6owf6QCCrz",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "gmail-draft",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "5a78f558-3742-4850-9a3f-46d2e0ec6a3f",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     -640,
+     -304
+    ],
+    "webhookId": "gmail-draft"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst to = String(body.to || '').trim();\nconst subject = String(body.subject || '').trim();\nconst bodyText = String(body.body || '').trim();\nconst replyToId = String(body.reply_to_id || '').trim();\nif (!to || !subject || !bodyText) {\n  return [{ json: { ok: false, error: 'Champs manquants : to, subject, body requis.', to, subject } }];\n}\nreturn [{ json: { ok: true, to, subject, bodyText, replyToId } }];"
+    },
+    "id": "e4cc2221-2ea5-4dcb-b093-052d6ea445e4",
+    "name": "Valider paramètres",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     -400,
+     -304
+    ]
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "options": {
+       "caseSensitive": false,
+       "leftValue": "",
+       "typeValidation": "strict",
+       "version": 1
+      },
+      "conditions": [
+       {
+        "leftValue": "={{ $json.ok }}",
+        "rightValue": true,
+        "operator": {
+         "type": "boolean",
+         "operation": "equal"
+        }
+       }
+      ],
+      "combinator": "and"
+     },
+     "options": {}
+    },
+    "id": "c9083f8d-8094-4426-8d45-1faf80bc57d0",
+    "name": "Paramètres OK ?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 2,
+    "position": [
+     -160,
+     -304
+    ]
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: false, error: $('Valider paramètres').first().json.error }) }}",
+     "options": {}
+    },
+    "id": "f2df5298-d4ff-4b30-9270-73a312164d36",
+    "name": "Répondre - Erreur",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     80,
+     -448
+    ]
+   },
+   {
+    "parameters": {
+     "resource": "draft",
+     "subject": "={{ $json.subject }}",
+     "message": "={{ $json.bodyText }}",
+     "options": {}
+    },
+    "id": "6b980d97-353e-4b54-bcb5-3833564f27f2",
+    "name": "Gmail - Créer brouillon",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     80,
+     -208
+    ],
+    "webhookId": "aabd8f3e-483a-4d61-86ff-e8109b40c7fb",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: true, draft_id: $json.id, to: $('Valider paramètres').first().json.to, subject: $('Valider paramètres').first().json.subject, message: 'Brouillon Gmail créé avec succès.' }) }}",
+     "options": {}
+    },
+    "id": "6001a626-0170-469a-ad1c-5b6952f62beb",
+    "name": "Répondre - Succès",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     320,
+     -208
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Valider paramètres",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Valider paramètres": {
+    "main": [
+     [
+      {
+       "node": "Paramètres OK ?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Paramètres OK ?": {
+    "main": [
+     [
+      {
+       "node": "Répondre - Erreur",
+       "type": "main",
+       "index": 0
+      }
+     ],
+     [
+      {
+       "node": "Gmail - Créer brouillon",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Gmail - Créer brouillon": {
+    "main": [
+     [
+      {
+       "node": "Répondre - Succès",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 9bed4bec",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-25T15:04:02.889Z",
+    "id": 78,
+    "workflowId": "0VjWYR6owf6QCCrz",
+    "versionId": "9bed4bec-9737-48d9-b846-60429824fcb3",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

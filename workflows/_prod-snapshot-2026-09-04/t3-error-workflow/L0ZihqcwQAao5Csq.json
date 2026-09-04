@@ -1,0 +1,320 @@
+{
+ "updatedAt": "2026-06-03T16:48:58.270Z",
+ "createdAt": "2026-06-03T14:41:38.459Z",
+ "id": "L0ZihqcwQAao5Csq",
+ "name": "outlook-search",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "outlook-search",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "eb4487a9-50a3-4c2b-8bde-8638c2e6a70c",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    1104,
+    -432
+   ],
+   "webhookId": "outlook-search"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim();\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nconst dateFrom = String(body.date_from || '').trim();\nlet url = `https://graph.microsoft.com/v1.0/me/messages?$top=${limit}&$select=id,subject,from,receivedDateTime,bodyPreview,importance`;\nif (q) {\n  url += `&$search=\"${encodeURIComponent(q)}\"`;\n} else {\n  url += '&$orderby=receivedDateTime desc';\n  if (dateFrom) url += `&$filter=receivedDateTime ge ${dateFrom}T00:00:00Z`;\n}\nreturn [{ json: { url, q, limit } }];"
+   },
+   "id": "8b9cd579-c6c4-4427-9753-d43fec29d176",
+   "name": "Configuration",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1344,
+    -432
+   ]
+  },
+  {
+   "parameters": {
+    "url": "={{ $json.url }}",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "oAuth2Api",
+    "options": {}
+   },
+   "id": "058e8f30-6204-44fd-97fc-39f6b5d91ef1",
+   "name": "Graph - Chercher emails",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1584,
+    -432
+   ],
+   "credentials": {
+    "oAuth2Api": {
+     "id": "cXwgnsn2JzgIpzFd",
+     "name": "Connect_Outlook_ouat"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const cfg = $('Configuration').first().json;\nconst data = $input.first().json;\nif (data.error) {\n  return [{ json: { ok: false, error: 'Outlook inaccessible.', emails: [], count: 0 } }];\n}\nconst messages = data.value || [];\nconst emails = messages.map(m => ({\n  id: m.id,\n  from: m.from?.emailAddress?.address || '',\n  from_name: m.from?.emailAddress?.name || '',\n  from_email: m.from?.emailAddress?.address || '',\n  subject: m.subject || '(sans objet)',\n  date: m.receivedDateTime,\n  snippet: (m.bodyPreview || '').slice(0, 400),\n  importance: m.importance,\n  source: 'outlook'\n}));\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+   },
+   "id": "a4c87787-b7b3-4d42-9f1d-6ab50065551a",
+   "name": "Formater résultats",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1824,
+    -432
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify($json) }}",
+    "options": {}
+   },
+   "id": "2c26e476-81c5-454f-8a7b-b7c630328264",
+   "name": "Répondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    2064,
+    -432
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Configuration",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Configuration": {
+   "main": [
+    [
+     {
+      "node": "Graph - Chercher emails",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Graph - Chercher emails": {
+   "main": [
+    [
+     {
+      "node": "Formater résultats",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Formater résultats": {
+   "main": [
+    [
+     {
+      "node": "Répondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": null,
+ "pinData": {},
+ "versionId": "84d1438b-e06f-4c1b-b7c7-5c31f7475866",
+ "activeVersionId": "84d1438b-e06f-4c1b-b7c7-5c31f7475866",
+ "versionCounter": 8,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-03T14:41:38.461Z",
+   "createdAt": "2026-06-03T14:41:38.461Z",
+   "role": "workflow:owner",
+   "workflowId": "L0ZihqcwQAao5Csq",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-03T16:49:23.000Z",
+  "createdAt": "2026-06-03T16:48:58.271Z",
+  "versionId": "84d1438b-e06f-4c1b-b7c7-5c31f7475866",
+  "workflowId": "L0ZihqcwQAao5Csq",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "outlook-search",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "eb4487a9-50a3-4c2b-8bde-8638c2e6a70c",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     1104,
+     -432
+    ],
+    "webhookId": "outlook-search"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim();\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nconst dateFrom = String(body.date_from || '').trim();\nlet url = `https://graph.microsoft.com/v1.0/me/messages?$top=${limit}&$select=id,subject,from,receivedDateTime,bodyPreview,importance`;\nif (q) {\n  url += `&$search=\"${encodeURIComponent(q)}\"`;\n} else {\n  url += '&$orderby=receivedDateTime desc';\n  if (dateFrom) url += `&$filter=receivedDateTime ge ${dateFrom}T00:00:00Z`;\n}\nreturn [{ json: { url, q, limit } }];"
+    },
+    "id": "8b9cd579-c6c4-4427-9753-d43fec29d176",
+    "name": "Configuration",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1344,
+     -432
+    ]
+   },
+   {
+    "parameters": {
+     "url": "={{ $json.url }}",
+     "authentication": "genericCredentialType",
+     "genericAuthType": "oAuth2Api",
+     "options": {}
+    },
+    "id": "058e8f30-6204-44fd-97fc-39f6b5d91ef1",
+    "name": "Graph - Chercher emails",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [
+     1584,
+     -432
+    ],
+    "credentials": {
+     "oAuth2Api": {
+      "id": "cXwgnsn2JzgIpzFd",
+      "name": "Connect_Outlook_ouat"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "const cfg = $('Configuration').first().json;\nconst data = $input.first().json;\nif (data.error) {\n  return [{ json: { ok: false, error: 'Outlook inaccessible.', emails: [], count: 0 } }];\n}\nconst messages = data.value || [];\nconst emails = messages.map(m => ({\n  id: m.id,\n  from: m.from?.emailAddress?.address || '',\n  from_name: m.from?.emailAddress?.name || '',\n  from_email: m.from?.emailAddress?.address || '',\n  subject: m.subject || '(sans objet)',\n  date: m.receivedDateTime,\n  snippet: (m.bodyPreview || '').slice(0, 400),\n  importance: m.importance,\n  source: 'outlook'\n}));\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+    },
+    "id": "a4c87787-b7b3-4d42-9f1d-6ab50065551a",
+    "name": "Formater résultats",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1824,
+     -432
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify($json) }}",
+     "options": {}
+    },
+    "id": "2c26e476-81c5-454f-8a7b-b7c630328264",
+    "name": "Répondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     2064,
+     -432
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Configuration",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Configuration": {
+    "main": [
+     [
+      {
+       "node": "Graph - Chercher emails",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Graph - Chercher emails": {
+    "main": [
+     [
+      {
+       "node": "Formater résultats",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Formater résultats": {
+    "main": [
+     [
+      {
+       "node": "Répondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 84d1438b",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-03T16:49:23.877Z",
+    "id": 25,
+    "workflowId": "L0ZihqcwQAao5Csq",
+    "versionId": "84d1438b-e06f-4c1b-b7c7-5c31f7475866",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

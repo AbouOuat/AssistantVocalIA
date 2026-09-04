@@ -1,0 +1,340 @@
+{
+ "updatedAt": "2026-06-04T10:00:57.474Z",
+ "createdAt": "2026-06-03T14:40:01.472Z",
+ "id": "XIqAaTATKELm6pad",
+ "name": "gmail-search",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "gmail-search",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "c8efe471-9b00-493a-8fbf-2889a7624464",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    1152,
+    -608
+   ],
+   "webhookId": "gmail-search"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim() || 'newer_than:7d';\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nreturn [{ json: { q, limit } }];"
+   },
+   "id": "570b7390-ed8e-44b8-868f-27b71ff2dfba",
+   "name": "Configuration",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1392,
+    -608
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "getAll",
+    "limit": "={{ $json.limit }}",
+    "filters": {
+     "q": "={{ $json.q }}"
+    },
+    "additionalFields": {
+     "format": "full"
+    }
+   },
+   "id": "22bc2e80-19d7-44a1-88d7-800029467e16",
+   "name": "Gmail - Chercher emails",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    1632,
+    -608
+   ],
+   "webhookId": "5bb01f7b-afcb-409a-8adf-18104bb291fe",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const cfg = $('Configuration').first().json;\nconst items = $input.all();\nif (!items.length || items[0].json?.error) {\n  return [{ json: { ok: false, error: 'Gmail inaccessible.', emails: [], count: 0 } }];\n}\nconst emails = items.map(item => {\n  const m = item.json;\n  // n8n Gmail node v2 expose From/Subject avec majuscule, internalDate en ms\n  const fromRaw = m.From || m.from || '';\n  const subject = m.Subject || m.subject || '(sans objet)';\n  const date = m.internalDate\n    ? new Date(parseInt(m.internalDate)).toISOString()\n    : (m.Date || m.date || '');\n  const match = fromRaw.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: m.id,\n    from: fromRaw,\n    from_name: (match?.[1] || fromRaw).trim(),\n    from_email: match?.[2] || fromRaw,\n    subject,\n    date,\n    snippet: (m.snippet || '').slice(0, 400),\n    source: 'gmail'\n  };\n}).filter(e => e.id);\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+   },
+   "id": "9bbb48a4-9710-48e1-be96-844f800c1426",
+   "name": "Formater r?sultats",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1872,
+    -608
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify($json) }}",
+    "options": {}
+   },
+   "id": "0a43e9b5-bac4-49e2-90b9-2cda553d5037",
+   "name": "R?pondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    2112,
+    -608
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Configuration",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Configuration": {
+   "main": [
+    [
+     {
+      "node": "Gmail - Chercher emails",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Gmail - Chercher emails": {
+   "main": [
+    [
+     {
+      "node": "Formater r?sultats",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Formater r?sultats": {
+   "main": [
+    [
+     {
+      "node": "R?pondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "dc4b3076-391f-4e0a-91d7-1cc6b38cb4a3",
+ "activeVersionId": "dc4b3076-391f-4e0a-91d7-1cc6b38cb4a3",
+ "versionCounter": 13,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-03T14:40:01.475Z",
+   "createdAt": "2026-06-03T14:40:01.475Z",
+   "role": "workflow:owner",
+   "workflowId": "XIqAaTATKELm6pad",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-04T10:00:57.475Z",
+  "createdAt": "2026-06-04T10:00:57.475Z",
+  "versionId": "dc4b3076-391f-4e0a-91d7-1cc6b38cb4a3",
+  "workflowId": "XIqAaTATKELm6pad",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "gmail-search",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "c8efe471-9b00-493a-8fbf-2889a7624464",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     1152,
+     -608
+    ],
+    "webhookId": "gmail-search"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst q = String(body.q || '').trim() || 'newer_than:7d';\nconst limit = Math.max(1, Math.min(50, parseInt(String(body.limit || 10), 10) || 10));\nreturn [{ json: { q, limit } }];"
+    },
+    "id": "570b7390-ed8e-44b8-868f-27b71ff2dfba",
+    "name": "Configuration",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1392,
+     -608
+    ]
+   },
+   {
+    "parameters": {
+     "operation": "getAll",
+     "limit": "={{ $json.limit }}",
+     "filters": {
+      "q": "={{ $json.q }}"
+     },
+     "additionalFields": {
+      "format": "full"
+     }
+    },
+    "id": "22bc2e80-19d7-44a1-88d7-800029467e16",
+    "name": "Gmail - Chercher emails",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     1632,
+     -608
+    ],
+    "webhookId": "5bb01f7b-afcb-409a-8adf-18104bb291fe",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "const cfg = $('Configuration').first().json;\nconst items = $input.all();\nif (!items.length || items[0].json?.error) {\n  return [{ json: { ok: false, error: 'Gmail inaccessible.', emails: [], count: 0 } }];\n}\nconst emails = items.map(item => {\n  const m = item.json;\n  // n8n Gmail node v2 expose From/Subject avec majuscule, internalDate en ms\n  const fromRaw = m.From || m.from || '';\n  const subject = m.Subject || m.subject || '(sans objet)';\n  const date = m.internalDate\n    ? new Date(parseInt(m.internalDate)).toISOString()\n    : (m.Date || m.date || '');\n  const match = fromRaw.match(/^(.*?)\\s*<(.+?)>$/);\n  return {\n    id: m.id,\n    from: fromRaw,\n    from_name: (match?.[1] || fromRaw).trim(),\n    from_email: match?.[2] || fromRaw,\n    subject,\n    date,\n    snippet: (m.snippet || '').slice(0, 400),\n    source: 'gmail'\n  };\n}).filter(e => e.id);\nreturn [{ json: { ok: true, emails, count: emails.length, query: cfg.q } }];"
+    },
+    "id": "9bbb48a4-9710-48e1-be96-844f800c1426",
+    "name": "Formater r?sultats",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1872,
+     -608
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify($json) }}",
+     "options": {}
+    },
+    "id": "0a43e9b5-bac4-49e2-90b9-2cda553d5037",
+    "name": "R?pondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     2112,
+     -608
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Configuration",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Configuration": {
+    "main": [
+     [
+      {
+       "node": "Gmail - Chercher emails",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Gmail - Chercher emails": {
+    "main": [
+     [
+      {
+       "node": "Formater r?sultats",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Formater r?sultats": {
+    "main": [
+     [
+      {
+       "node": "R?pondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": null,
+  "description": null,
+  "autosaved": false,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-04T10:00:57.517Z",
+    "id": 52,
+    "workflowId": "XIqAaTATKELm6pad",
+    "versionId": "dc4b3076-391f-4e0a-91d7-1cc6b38cb4a3",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   },
+   {
+    "createdAt": "2026-06-04T10:00:57.508Z",
+    "id": 51,
+    "workflowId": "XIqAaTATKELm6pad",
+    "versionId": "dc4b3076-391f-4e0a-91d7-1cc6b38cb4a3",
+    "event": "deactivated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

@@ -1,0 +1,328 @@
+{
+ "updatedAt": "2026-06-25T15:04:58.828Z",
+ "createdAt": "2026-06-24T11:38:22.607Z",
+ "id": "TadXnsRGQ8Oumltf",
+ "name": "google-calendar-read",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "google-calendar-read",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "63d5dc88-5662-4f97-b28b-f0eeb38fa7bf",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    2976,
+    -1408
+   ],
+   "webhookId": "google-calendar-read"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst calendarId = body.calendar_id || (typeof process !== 'undefined' && process.env?.CLIENT_CALENDAR_ID) || 'primary';\n\n// date_debut et date_fin sont des YYYY-MM-DD calculés par le LLM\nconst dateDebut = body.date_debut || new Date().toISOString().slice(0, 10);\nconst dateFin   = body.date_fin   || dateDebut;\n\n// Minuit Paris = UTC-2 (été) → on ajoute T00:00:00+02:00 / T23:59:59+02:00\nconst timeMin = dateDebut + 'T00:00:00+02:00';\nconst timeMax = dateFin   + 'T23:59:59+02:00';\n\nreturn [{ json: { dateDebut, dateFin, calendarId, timeMin, timeMax } }];"
+   },
+   "id": "bcd113d9-d813-4f3b-a690-b4ee134f1e80",
+   "name": "Calcul plage horaire",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3200,
+    -1408
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "getAll",
+    "calendar": {
+     "__rl": true,
+     "value": "={{ $json.calendarId }}",
+     "mode": "id"
+    },
+    "limit": 20,
+    "options": {}
+   },
+   "id": "82a21244-7dae-4239-9b5a-9e4029e8bbcf",
+   "name": "Google Calendar — Lire événements",
+   "type": "n8n-nodes-base.googleCalendar",
+   "typeVersion": 1.1,
+   "position": [
+    3424,
+    -1408
+   ],
+   "credentials": {
+    "googleCalendarOAuth2Api": {
+     "id": "b6DN69T7tToNOU4C",
+     "name": "Google Calendar Jarvis"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const items = $input.all();\nconst cfg = $('Calcul plage horaire').first().json;\nconst timeMin = new Date(cfg.timeMin);\nconst timeMax = new Date(cfg.timeMax);\n\n// Filtre JS : garde uniquement les events dans la plage (Bug A — filtre n8n parfois ignoré)\nconst events = items\n  .map(i => i.json)\n  .filter(e => {\n    if (!e.id) return false;\n    const start = new Date(e.start?.dateTime || e.start?.date);\n    return start >= timeMin && start <= timeMax;\n  });\n\nreturn [{ json: { ok: true, date_debut: cfg.dateDebut, date_fin: cfg.dateFin, events, count: events.length, fetched_at: new Date().toISOString() } }];"
+   },
+   "id": "f49d782e-20b4-4313-aa3e-306b70ae8c18",
+   "name": "Format réponse",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3648,
+    -1408
+   ]
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify($json) }}",
+    "options": {}
+   },
+   "id": "2a65bf11-d736-46ec-861b-b35c795cc1c8",
+   "name": "Répondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    3856,
+    -1408
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Calcul plage horaire",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Calcul plage horaire": {
+   "main": [
+    [
+     {
+      "node": "Google Calendar — Lire événements",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Google Calendar — Lire événements": {
+   "main": [
+    [
+     {
+      "node": "Format réponse",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Format réponse": {
+   "main": [
+    [
+     {
+      "node": "Répondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "8941c415-e54f-4ea0-bdee-92d8067b8b47",
+ "activeVersionId": "8941c415-e54f-4ea0-bdee-92d8067b8b47",
+ "versionCounter": 13,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-24T11:38:22.609Z",
+   "createdAt": "2026-06-24T11:38:22.609Z",
+   "role": "workflow:owner",
+   "workflowId": "TadXnsRGQ8Oumltf",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-25T15:05:26.000Z",
+  "createdAt": "2026-06-25T15:04:58.829Z",
+  "versionId": "8941c415-e54f-4ea0-bdee-92d8067b8b47",
+  "workflowId": "TadXnsRGQ8Oumltf",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "google-calendar-read",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "63d5dc88-5662-4f97-b28b-f0eeb38fa7bf",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     2976,
+     -1408
+    ],
+    "webhookId": "google-calendar-read"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst calendarId = body.calendar_id || (typeof process !== 'undefined' && process.env?.CLIENT_CALENDAR_ID) || 'primary';\n\n// date_debut et date_fin sont des YYYY-MM-DD calculés par le LLM\nconst dateDebut = body.date_debut || new Date().toISOString().slice(0, 10);\nconst dateFin   = body.date_fin   || dateDebut;\n\n// Minuit Paris = UTC-2 (été) → on ajoute T00:00:00+02:00 / T23:59:59+02:00\nconst timeMin = dateDebut + 'T00:00:00+02:00';\nconst timeMax = dateFin   + 'T23:59:59+02:00';\n\nreturn [{ json: { dateDebut, dateFin, calendarId, timeMin, timeMax } }];"
+    },
+    "id": "bcd113d9-d813-4f3b-a690-b4ee134f1e80",
+    "name": "Calcul plage horaire",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3200,
+     -1408
+    ]
+   },
+   {
+    "parameters": {
+     "operation": "getAll",
+     "calendar": {
+      "__rl": true,
+      "value": "={{ $json.calendarId }}",
+      "mode": "id"
+     },
+     "limit": 20,
+     "options": {}
+    },
+    "id": "82a21244-7dae-4239-9b5a-9e4029e8bbcf",
+    "name": "Google Calendar — Lire événements",
+    "type": "n8n-nodes-base.googleCalendar",
+    "typeVersion": 1.1,
+    "position": [
+     3424,
+     -1408
+    ],
+    "credentials": {
+     "googleCalendarOAuth2Api": {
+      "id": "b6DN69T7tToNOU4C",
+      "name": "Google Calendar Jarvis"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "const items = $input.all();\nconst cfg = $('Calcul plage horaire').first().json;\nconst timeMin = new Date(cfg.timeMin);\nconst timeMax = new Date(cfg.timeMax);\n\n// Filtre JS : garde uniquement les events dans la plage (Bug A — filtre n8n parfois ignoré)\nconst events = items\n  .map(i => i.json)\n  .filter(e => {\n    if (!e.id) return false;\n    const start = new Date(e.start?.dateTime || e.start?.date);\n    return start >= timeMin && start <= timeMax;\n  });\n\nreturn [{ json: { ok: true, date_debut: cfg.dateDebut, date_fin: cfg.dateFin, events, count: events.length, fetched_at: new Date().toISOString() } }];"
+    },
+    "id": "f49d782e-20b4-4313-aa3e-306b70ae8c18",
+    "name": "Format réponse",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3648,
+     -1408
+    ]
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify($json) }}",
+     "options": {}
+    },
+    "id": "2a65bf11-d736-46ec-861b-b35c795cc1c8",
+    "name": "Répondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     3856,
+     -1408
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Calcul plage horaire",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Calcul plage horaire": {
+    "main": [
+     [
+      {
+       "node": "Google Calendar — Lire événements",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Google Calendar — Lire événements": {
+    "main": [
+     [
+      {
+       "node": "Format réponse",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Format réponse": {
+    "main": [
+     [
+      {
+       "node": "Répondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 8941c415",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-25T15:05:26.637Z",
+    "id": 80,
+    "workflowId": "TadXnsRGQ8Oumltf",
+    "versionId": "8941c415-e54f-4ea0-bdee-92d8067b8b47",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

@@ -1,0 +1,322 @@
+{
+ "updatedAt": "2026-06-25T15:06:19.018Z",
+ "createdAt": "2026-06-24T11:36:55.747Z",
+ "id": "r5DLYTJIljZVZwtp",
+ "name": "outlook-read-inbox",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "outlook-read-inbox",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "8342e021-376e-45a6-a5a4-242cafc6d999",
+   "name": "Webhook Jarvis",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    2704,
+    -1632
+   ],
+   "webhookId": "outlook-read-inbox"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json?.body || {};\nlet limit = 10;\ntry {\n  if (body.limit !== undefined && body.limit !== null) {\n    const parsed = parseInt(String(body.limit), 10);\n    if (!isNaN(parsed)) limit = Math.max(1, Math.min(20, parsed));\n  }\n} catch(e) {}\nconst VALID_FOLDERS = ['inbox', 'junkemail', 'deleteditems', 'sentItems', 'drafts', 'archive'];\nconst rawFolder = String(body.folder || 'inbox').trim();\nconst folder = VALID_FOLDERS.includes(rawFolder) ? rawFolder : 'inbox';\nreturn [{ json: { limit, folder } }];"
+   },
+   "id": "82e66904-9ad7-4d00-84ff-d21a9108ab18",
+   "name": "Config",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2928,
+    -1632
+   ]
+  },
+  {
+   "parameters": {
+    "operation": "getAll",
+    "limit": "={{ $('Config').first().json.limit }}",
+    "options": {}
+   },
+   "id": "cd5c7c2a-08e4-46d4-93ae-66a80a12599d",
+   "name": "Outlook — Lire inbox",
+   "type": "n8n-nodes-base.microsoftOutlook",
+   "typeVersion": 2,
+   "position": [
+    3152,
+    -1632
+   ],
+   "alwaysOutputData": true,
+   "webhookId": "9dccf299-7784-4a7f-bff8-324274a7a57f",
+   "credentials": {
+    "microsoftOutlookOAuth2Api": {
+     "id": "FC5hj9WnGqzbWpsV",
+     "name": "Connect_Outlook_ouat_native"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const items = $input.all();\n// Guard alwaysOutputData : item vide = aucun email dans l'inbox\nif (items.length === 1 && !items[0].json.id && !items[0].json.subject) {\n  return [{ json: { ok: true, emails: [], count: 0, fetched_at: new Date().toISOString() } }];\n}\n// Erreur noeud natif\nif (items.length === 1 && items[0].json.error) {\n  return [{ json: { ok: false, error: items[0].json.error.message || 'Outlook error', emails: [], count: 0, fetched_at: new Date().toISOString() } }];\n}\nconst emails = items.map(i => i.json);\nreturn [{ json: { ok: true, emails, count: emails.length, fetched_at: new Date().toISOString() } }];"
+   },
+   "id": "4d9417e6-6091-49f6-a668-b34e0af1f069",
+   "name": "Format réponse",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3376,
+    -1632
+   ]
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify($json) }}",
+    "options": {}
+   },
+   "id": "74ad3d90-6776-40c4-9a5e-9ce2d511405a",
+   "name": "Répondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    3584,
+    -1632
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook Jarvis": {
+   "main": [
+    [
+     {
+      "node": "Config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Config": {
+   "main": [
+    [
+     {
+      "node": "Outlook — Lire inbox",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Outlook — Lire inbox": {
+   "main": [
+    [
+     {
+      "node": "Format réponse",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Format réponse": {
+   "main": [
+    [
+     {
+      "node": "Répondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "f0cd5b18-2c7c-4f2e-be18-b4296ce8b13b",
+ "activeVersionId": "f0cd5b18-2c7c-4f2e-be18-b4296ce8b13b",
+ "versionCounter": 14,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-24T11:36:55.753Z",
+   "createdAt": "2026-06-24T11:36:55.753Z",
+   "role": "workflow:owner",
+   "workflowId": "r5DLYTJIljZVZwtp",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-25T15:06:31.000Z",
+  "createdAt": "2026-06-25T15:06:19.019Z",
+  "versionId": "f0cd5b18-2c7c-4f2e-be18-b4296ce8b13b",
+  "workflowId": "r5DLYTJIljZVZwtp",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "outlook-read-inbox",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "8342e021-376e-45a6-a5a4-242cafc6d999",
+    "name": "Webhook Jarvis",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     2704,
+     -1632
+    ],
+    "webhookId": "outlook-read-inbox"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json?.body || {};\nlet limit = 10;\ntry {\n  if (body.limit !== undefined && body.limit !== null) {\n    const parsed = parseInt(String(body.limit), 10);\n    if (!isNaN(parsed)) limit = Math.max(1, Math.min(20, parsed));\n  }\n} catch(e) {}\nconst VALID_FOLDERS = ['inbox', 'junkemail', 'deleteditems', 'sentItems', 'drafts', 'archive'];\nconst rawFolder = String(body.folder || 'inbox').trim();\nconst folder = VALID_FOLDERS.includes(rawFolder) ? rawFolder : 'inbox';\nreturn [{ json: { limit, folder } }];"
+    },
+    "id": "82e66904-9ad7-4d00-84ff-d21a9108ab18",
+    "name": "Config",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     2928,
+     -1632
+    ]
+   },
+   {
+    "parameters": {
+     "operation": "getAll",
+     "limit": "={{ $('Config').first().json.limit }}",
+     "options": {}
+    },
+    "id": "cd5c7c2a-08e4-46d4-93ae-66a80a12599d",
+    "name": "Outlook — Lire inbox",
+    "type": "n8n-nodes-base.microsoftOutlook",
+    "typeVersion": 2,
+    "position": [
+     3152,
+     -1632
+    ],
+    "alwaysOutputData": true,
+    "webhookId": "9dccf299-7784-4a7f-bff8-324274a7a57f",
+    "credentials": {
+     "microsoftOutlookOAuth2Api": {
+      "id": "FC5hj9WnGqzbWpsV",
+      "name": "Connect_Outlook_ouat_native"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "const items = $input.all();\n// Guard alwaysOutputData : item vide = aucun email dans l'inbox\nif (items.length === 1 && !items[0].json.id && !items[0].json.subject) {\n  return [{ json: { ok: true, emails: [], count: 0, fetched_at: new Date().toISOString() } }];\n}\n// Erreur noeud natif\nif (items.length === 1 && items[0].json.error) {\n  return [{ json: { ok: false, error: items[0].json.error.message || 'Outlook error', emails: [], count: 0, fetched_at: new Date().toISOString() } }];\n}\nconst emails = items.map(i => i.json);\nreturn [{ json: { ok: true, emails, count: emails.length, fetched_at: new Date().toISOString() } }];"
+    },
+    "id": "4d9417e6-6091-49f6-a668-b34e0af1f069",
+    "name": "Format réponse",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     3376,
+     -1632
+    ]
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify($json) }}",
+     "options": {}
+    },
+    "id": "74ad3d90-6776-40c4-9a5e-9ce2d511405a",
+    "name": "Répondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     3584,
+     -1632
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook Jarvis": {
+    "main": [
+     [
+      {
+       "node": "Config",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Config": {
+    "main": [
+     [
+      {
+       "node": "Outlook — Lire inbox",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Outlook — Lire inbox": {
+    "main": [
+     [
+      {
+       "node": "Format réponse",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Format réponse": {
+    "main": [
+     [
+      {
+       "node": "Répondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version f0cd5b18",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-25T15:06:31.076Z",
+    "id": 82,
+    "workflowId": "r5DLYTJIljZVZwtp",
+    "versionId": "f0cd5b18-2c7c-4f2e-be18-b4296ce8b13b",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

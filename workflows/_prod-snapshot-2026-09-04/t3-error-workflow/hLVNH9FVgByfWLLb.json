@@ -1,0 +1,486 @@
+{
+ "updatedAt": "2026-06-27T15:00:27.212Z",
+ "createdAt": "2026-06-01T08:27:20.499Z",
+ "id": "hLVNH9FVgByfWLLb",
+ "name": "morning-briefing",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "morning-briefing",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "05e21e0c-984f-4793-a26b-a5eb96608cb8",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -496,
+    -256
+   ],
+   "webhookId": "731210b0-8a51-43d0-ac35-07dfb5e22919"
+  },
+  {
+   "parameters": {
+    "url": "https://api.openweathermap.org/data/2.5/weather",
+    "sendQuery": true,
+    "queryParameters": {
+     "parameters": [
+      {
+       "name": "q",
+       "value": "Paris,FR"
+      },
+      {
+       "name": "appid",
+       "value": "={{ $env.OPENWEATHER_API_KEY }}"
+      },
+      {
+       "name": "units",
+       "value": "metric"
+      },
+      {
+       "name": "lang",
+       "value": "fr"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "id": "e3fa4701-a251-4183-8b61-06768126bf2d",
+   "name": "Météo du jour",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4,
+   "position": [
+    -272,
+    -256
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "operation": "getAll",
+    "limit": 5,
+    "filters": {
+     "q": "is:unread newer_than:1d"
+    }
+   },
+   "id": "93a4aa82-3a11-4724-a979-fb4c3014ab16",
+   "name": "Emails non lus",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    -64,
+    -256
+   ],
+   "webhookId": "80671e27-0d3b-4ebb-9155-ee193fda00dd",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "operation": "getAll",
+    "calendar": {
+     "__rl": true,
+     "value": "={{ $env.CLIENT_CALENDAR_ID }}",
+     "mode": "id"
+    },
+    "limit": 10,
+    "options": {
+     "timeMin": "={{ $now.startOf('day').toISO() }}",
+     "timeMax": "={{ $now.endOf('day').toISO() }}",
+     "singleEvents": true,
+     "orderBy": "startTime"
+    },
+    "calendarId": "={{ $json.body.calendar_id }}"
+   },
+   "id": "019b9d29-f86c-4b63-8cfe-12627e361774",
+   "name": "Agenda du jour",
+   "type": "n8n-nodes-base.googleCalendar",
+   "typeVersion": 1,
+   "position": [
+    176,
+    -256
+   ],
+   "credentials": {
+    "googleCalendarOAuth2Api": {
+     "id": "b6DN69T7tToNOU4C",
+     "name": "Google Calendar Jarvis"
+    }
+   },
+   "continueOnFail": true,
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// Flux : Météo → Emails → Agenda → Format\nlet weatherNode = {};\ntry { weatherNode = $('Météo du jour').first().json; } catch(e) {}\n\nconst emailItems = $('Emails non lus').all();\nconst calendarItems = $input.all();\n\n// Météo\nlet weatherSummary;\ntry {\n  if (!weatherNode.main) {\n    weatherSummary = 'Météo temporairement indisponible';\n  } else {\n    weatherSummary = `${weatherNode.weather[0].description}, ${Math.round(weatherNode.main.temp)}°C (ressenti ${Math.round(weatherNode.main.feels_like)}°C)`;\n  }\n} catch(e) {\n  weatherSummary = 'Météo indisponible';\n}\n\n// Emails\nlet emailSummary = 'Emails non disponibles.';\nlet emailCount = 0;\ntry {\n  const validEmails = emailItems.filter(e => e.json && !e.json.error);\n  emailCount = validEmails.length;\n  if (emailCount === 0) {\n    emailSummary = 'Aucun email non lu.';\n  } else {\n    emailSummary = validEmails.map(e => {\n      const d = e.json;\n      const fromRaw = d.From || d.from || '';\n      const from = fromRaw ? (fromRaw.includes('<') ? fromRaw.split('<')[0].trim() : fromRaw) : 'Inconnu';\n      const snippet = d.snippet || d.bodyPreview || '';\n      return `• ${from}: ${snippet.substring(0, 80)}...`;\n    }).join('\\n');\n  }\n} catch(e) {\n  emailSummary = 'Erreur lecture emails: ' + e.message;\n}\n\n// Agenda\nlet calendarSummary = 'Agenda non disponible.';\nlet eventCount = 0;\ntry {\n  const validEvents = calendarItems.filter(e => e.json && !e.json.error && e.json.summary);\n  eventCount = validEvents.length;\n  if (eventCount === 0) {\n    calendarSummary = \"Aucun événement aujourd'hui.\";\n  } else {\n    calendarSummary = validEvents.map(e => {\n      const ev = e.json;\n      const title = ev.summary || 'Sans titre';\n      const start = ev.start?.dateTime || ev.start?.date || '';\n      let timeStr = '';\n      if (start) {\n        try {\n          const d = new Date(start);\n          timeStr = ev.start?.dateTime\n            ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })\n            : 'Journée entière';\n        } catch(e) { timeStr = start; }\n      }\n      return `• ${timeStr ? timeStr + ' - ' : ''}${title}`;\n    }).join('\\n');\n  }\n} catch(e) {\n  calendarSummary = 'Erreur lecture agenda: ' + e.message;\n}\n\nconst now = new Date();\nconst greeting = now.getHours() < 12 ? 'Bonjour' : 'Bonsoir';\nconst dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });\n\nreturn [{ json: {\n  briefing: `${greeting} Abo ! Nous sommes le ${dateStr}.\\n\\nMeteo : ${weatherSummary}.\\n\\nAgenda du jour (${eventCount} evenement(s)) :\\n${calendarSummary}\\n\\nEmails importants :\\n${emailSummary}`,\n  weather: weatherSummary,\n  email_count: emailCount,\n  event_count: eventCount\n}}];"
+   },
+   "id": "d6be9c88-2919-49d1-90e5-c3b357592f5f",
+   "name": "Formater le briefing",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    384,
+    -256
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ briefing: $json.briefing, weather: $json.weather, email_count: $json.email_count, event_count: $json.event_count }) }}",
+    "options": {}
+   },
+   "id": "59f476a0-4b65-4acb-b433-78d60599de03",
+   "name": "Répondre",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    608,
+    -256
+   ]
+  }
+ ],
+ "connections": {
+  "Webhook": {
+   "main": [
+    [
+     {
+      "node": "Météo du jour",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Météo du jour": {
+   "main": [
+    [
+     {
+      "node": "Emails non lus",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Emails non lus": {
+   "main": [
+    [
+     {
+      "node": "Agenda du jour",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Agenda du jour": {
+   "main": [
+    [
+     {
+      "node": "Formater le briefing",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Formater le briefing": {
+   "main": [
+    [
+     {
+      "node": "Répondre",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": null,
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+ "activeVersionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+ "versionCounter": 59,
+ "triggerCount": 1,
+ "shared": [
+  {
+   "updatedAt": "2026-06-01T08:27:20.538Z",
+   "createdAt": "2026-06-01T08:27:20.538Z",
+   "role": "workflow:owner",
+   "workflowId": "hLVNH9FVgByfWLLb",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-27T14:57:53.670Z",
+  "createdAt": "2026-06-27T14:57:53.670Z",
+  "versionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+  "workflowId": "hLVNH9FVgByfWLLb",
+  "nodes": [
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "morning-briefing",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "05e21e0c-984f-4793-a26b-a5eb96608cb8",
+    "name": "Webhook",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     -496,
+     -256
+    ],
+    "webhookId": "731210b0-8a51-43d0-ac35-07dfb5e22919"
+   },
+   {
+    "parameters": {
+     "url": "https://api.openweathermap.org/data/2.5/weather",
+     "sendQuery": true,
+     "queryParameters": {
+      "parameters": [
+       {
+        "name": "q",
+        "value": "Paris,FR"
+       },
+       {
+        "name": "appid",
+        "value": "={{ $env.OPENWEATHER_API_KEY }}"
+       },
+       {
+        "name": "units",
+        "value": "metric"
+       },
+       {
+        "name": "lang",
+        "value": "fr"
+       }
+      ]
+     },
+     "options": {}
+    },
+    "id": "e3fa4701-a251-4183-8b61-06768126bf2d",
+    "name": "Météo du jour",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4,
+    "position": [
+     -272,
+     -256
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "operation": "getAll",
+     "limit": 5,
+     "filters": {
+      "q": "is:unread newer_than:1d"
+     }
+    },
+    "id": "93a4aa82-3a11-4724-a979-fb4c3014ab16",
+    "name": "Emails non lus",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     -64,
+     -256
+    ],
+    "webhookId": "80671e27-0d3b-4ebb-9155-ee193fda00dd",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "operation": "getAll",
+     "calendar": {
+      "__rl": true,
+      "value": "={{ $env.CLIENT_CALENDAR_ID }}",
+      "mode": "id"
+     },
+     "limit": 10,
+     "options": {
+      "timeMin": "={{ $now.startOf('day').toISO() }}",
+      "timeMax": "={{ $now.endOf('day').toISO() }}",
+      "singleEvents": true,
+      "orderBy": "startTime"
+     },
+     "calendarId": "={{ $json.body.calendar_id }}"
+    },
+    "id": "019b9d29-f86c-4b63-8cfe-12627e361774",
+    "name": "Agenda du jour",
+    "type": "n8n-nodes-base.googleCalendar",
+    "typeVersion": 1,
+    "position": [
+     176,
+     -256
+    ],
+    "credentials": {
+     "googleCalendarOAuth2Api": {
+      "id": "b6DN69T7tToNOU4C",
+      "name": "Google Calendar Jarvis"
+     }
+    },
+    "continueOnFail": true,
+    "alwaysOutputData": true
+   },
+   {
+    "parameters": {
+     "jsCode": "// Flux : Météo → Emails → Agenda → Format\nlet weatherNode = {};\ntry { weatherNode = $('Météo du jour').first().json; } catch(e) {}\n\nconst emailItems = $('Emails non lus').all();\nconst calendarItems = $input.all();\n\n// Météo\nlet weatherSummary;\ntry {\n  if (!weatherNode.main) {\n    weatherSummary = 'Météo temporairement indisponible';\n  } else {\n    weatherSummary = `${weatherNode.weather[0].description}, ${Math.round(weatherNode.main.temp)}°C (ressenti ${Math.round(weatherNode.main.feels_like)}°C)`;\n  }\n} catch(e) {\n  weatherSummary = 'Météo indisponible';\n}\n\n// Emails\nlet emailSummary = 'Emails non disponibles.';\nlet emailCount = 0;\ntry {\n  const validEmails = emailItems.filter(e => e.json && !e.json.error);\n  emailCount = validEmails.length;\n  if (emailCount === 0) {\n    emailSummary = 'Aucun email non lu.';\n  } else {\n    emailSummary = validEmails.map(e => {\n      const d = e.json;\n      const fromRaw = d.From || d.from || '';\n      const from = fromRaw ? (fromRaw.includes('<') ? fromRaw.split('<')[0].trim() : fromRaw) : 'Inconnu';\n      const snippet = d.snippet || d.bodyPreview || '';\n      return `• ${from}: ${snippet.substring(0, 80)}...`;\n    }).join('\\n');\n  }\n} catch(e) {\n  emailSummary = 'Erreur lecture emails: ' + e.message;\n}\n\n// Agenda\nlet calendarSummary = 'Agenda non disponible.';\nlet eventCount = 0;\ntry {\n  const validEvents = calendarItems.filter(e => e.json && !e.json.error && e.json.summary);\n  eventCount = validEvents.length;\n  if (eventCount === 0) {\n    calendarSummary = \"Aucun événement aujourd'hui.\";\n  } else {\n    calendarSummary = validEvents.map(e => {\n      const ev = e.json;\n      const title = ev.summary || 'Sans titre';\n      const start = ev.start?.dateTime || ev.start?.date || '';\n      let timeStr = '';\n      if (start) {\n        try {\n          const d = new Date(start);\n          timeStr = ev.start?.dateTime\n            ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })\n            : 'Journée entière';\n        } catch(e) { timeStr = start; }\n      }\n      return `• ${timeStr ? timeStr + ' - ' : ''}${title}`;\n    }).join('\\n');\n  }\n} catch(e) {\n  calendarSummary = 'Erreur lecture agenda: ' + e.message;\n}\n\nconst now = new Date();\nconst greeting = now.getHours() < 12 ? 'Bonjour' : 'Bonsoir';\nconst dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });\n\nreturn [{ json: {\n  briefing: `${greeting} Abo ! Nous sommes le ${dateStr}.\\n\\nMeteo : ${weatherSummary}.\\n\\nAgenda du jour (${eventCount} evenement(s)) :\\n${calendarSummary}\\n\\nEmails importants :\\n${emailSummary}`,\n  weather: weatherSummary,\n  email_count: emailCount,\n  event_count: eventCount\n}}];"
+    },
+    "id": "d6be9c88-2919-49d1-90e5-c3b357592f5f",
+    "name": "Formater le briefing",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     384,
+     -256
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ briefing: $json.briefing, weather: $json.weather, email_count: $json.email_count, event_count: $json.event_count }) }}",
+     "options": {}
+    },
+    "id": "59f476a0-4b65-4acb-b433-78d60599de03",
+    "name": "Répondre",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     608,
+     -256
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook": {
+    "main": [
+     [
+      {
+       "node": "Météo du jour",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Météo du jour": {
+    "main": [
+     [
+      {
+       "node": "Emails non lus",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Emails non lus": {
+    "main": [
+     [
+      {
+       "node": "Agenda du jour",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Agenda du jour": {
+    "main": [
+     [
+      {
+       "node": "Formater le briefing",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Formater le briefing": {
+    "main": [
+     [
+      {
+       "node": "Répondre",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": null,
+  "description": null,
+  "autosaved": false,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-27T14:57:53.723Z",
+    "id": 92,
+    "workflowId": "hLVNH9FVgByfWLLb",
+    "versionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   },
+   {
+    "createdAt": "2026-06-27T15:00:27.253Z",
+    "id": 94,
+    "workflowId": "hLVNH9FVgByfWLLb",
+    "versionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   },
+   {
+    "createdAt": "2026-06-27T14:57:53.708Z",
+    "id": 91,
+    "workflowId": "hLVNH9FVgByfWLLb",
+    "versionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+    "event": "deactivated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   },
+   {
+    "createdAt": "2026-06-27T15:00:27.242Z",
+    "id": 93,
+    "workflowId": "hLVNH9FVgByfWLLb",
+    "versionId": "095e5aeb-b1d9-45b2-b1ff-b3904adc8bdb",
+    "event": "deactivated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

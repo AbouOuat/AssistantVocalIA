@@ -1,0 +1,652 @@
+{
+ "updatedAt": "2026-06-03T18:58:25.565Z",
+ "createdAt": "2026-06-02T19:57:11.105Z",
+ "id": "1tnbGRizEeqwkUU2",
+ "name": "reminders",
+ "description": null,
+ "active": true,
+ "isArchived": false,
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "minutes"
+      }
+     ]
+    }
+   },
+   "id": "a31f7cd5-3394-4996-abab-b55f09c3c77b",
+   "name": "Toutes les 5 minutes",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1,
+   "position": [
+    -48,
+    -352
+   ]
+  },
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "reminders",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "id": "761f41ad-0d12-485d-a45f-1edacead726f",
+   "name": "Webhook - Nouveau rappel",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1,
+   "position": [
+    -48,
+    -128
+   ],
+   "webhookId": "reminders"
+  },
+  {
+   "parameters": {
+    "jsCode": "const body = $input.first().json.body || {};\nconst text = String(body.text || '').trim();\nconst due_at = String(body.due_at || '').trim();\nif (!text) return [{ json: { ok: false, error: 'Texte manquant' } }];\nlet due_str = '';\nif (due_at) {\n  try { due_str = new Date(due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }); } catch(e) { due_str = due_at; }\n}\nconst subject = '[Jarvis] Rappel créé : ' + text.slice(0, 60);\nconst emailBody = 'Bonjour Abo !\\n\\n✅ Ton rappel a bien été créé :\\n\\n' + '📌 ' + text + (due_str ? '\\n⏰ Échéance : ' + due_str : '') + '\\n\\nJe te notifierai quand ce sera l\\'heure.\\n\\nJarvis';\nreturn [{ json: { ok: true, text, due_str, subject, emailBody } }];"
+   },
+   "id": "14e16249-b8ad-4bae-8bdb-7e78386a683a",
+   "name": "Formater confirmation",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    208,
+    -128
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "sendTo": "ouat.abou34@gmail.com",
+    "subject": "={{ $json.subject }}",
+    "message": "={{ $json.emailBody }}",
+    "options": {}
+   },
+   "id": "00acc22d-9649-41a8-93d0-e0e24291f94b",
+   "name": "Email confirmation",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    464,
+    -128
+   ],
+   "webhookId": "6f7c2fa2-c028-4380-ac25-aecf6b4bd4eb",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify({ ok: true, message: 'Rappel enregistré, confirmation email envoyée.', text: $('Formater confirmation').first().json.text, due_str: $('Formater confirmation').first().json.due_str }) }}",
+    "options": {}
+   },
+   "id": "656e5da1-79eb-4d09-ac2a-ce92ccd8f02e",
+   "name": "Répondre Webhook",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1,
+   "position": [
+    720,
+    -128
+   ]
+  },
+  {
+   "parameters": {
+    "url": "http://backend:8000/api/reminders/pending",
+    "options": {}
+   },
+   "id": "79fbd03d-1881-4a41-9c2e-3f6c5864e8d2",
+   "name": "Rappels dus",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4,
+   "position": [
+    160,
+    -352
+   ],
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "number": [
+      {
+       "value1": "={{ $json.count }}",
+       "operation": "larger"
+      }
+     ]
+    }
+   },
+   "id": "423f8bb0-8608-492b-a1c4-6be4fe98a3f8",
+   "name": "Y a-t-il des rappels ?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 1,
+   "position": [
+    384,
+    -352
+   ]
+  },
+  {
+   "parameters": {
+    "jsCode": "const mailDest = 'ouat.abou34@gmail.com';\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (échéance : ' + new Date(t.due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour Abo !\\n\\n⏰ Rappels à traiter maintenant :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ⏰ ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
+   },
+   "id": "0b32f165-a204-4af2-8b19-b86d1093e3e0",
+   "name": "Formater l'email",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    608,
+    -432
+   ]
+  },
+  {
+   "parameters": {
+    "sendTo": "={{ $json.mailDest }}",
+    "subject": "={{ $json.subject }}",
+    "message": "={{ $json.body }}",
+    "options": {}
+   },
+   "id": "0e909482-9376-4388-a4bf-8578549791bf",
+   "name": "Envoyer email",
+   "type": "n8n-nodes-base.gmail",
+   "typeVersion": 2,
+   "position": [
+    832,
+    -432
+   ],
+   "webhookId": "be5990f2-4f81-45e7-af7f-355f327108ae",
+   "credentials": {
+    "gmailOAuth2": {
+     "id": "ZO3kLaKLb2hdHVw5",
+     "name": "Gmail account"
+    }
+   },
+   "continueOnFail": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const task_ids = $('Formater l\\'email').first().json.task_ids;\nconst results = [];\nfor (const id of task_ids) {\n  results.push({ json: { id, url: 'http://backend:8000/api/reminders/' + id + '/notified' } });\n}\nreturn results;"
+   },
+   "id": "fb8e79ff-44c5-4740-8f4d-d598f23871cc",
+   "name": "Preparer mark notified",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1056,
+    -432
+   ]
+  },
+  {
+   "parameters": {
+    "method": "PATCH",
+    "url": "={{ $json.url }}",
+    "options": {}
+   },
+   "id": "b876d4ac-2bcd-4b09-acad-ef766b819c6b",
+   "name": "Marquer notifies",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4,
+   "position": [
+    1280,
+    -432
+   ],
+   "continueOnFail": true
+  }
+ ],
+ "connections": {
+  "Toutes les 5 minutes": {
+   "main": [
+    [
+     {
+      "node": "Rappels dus",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Webhook - Nouveau rappel": {
+   "main": [
+    [
+     {
+      "node": "Formater confirmation",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Formater confirmation": {
+   "main": [
+    [
+     {
+      "node": "Email confirmation",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Email confirmation": {
+   "main": [
+    [
+     {
+      "node": "Répondre Webhook",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Rappels dus": {
+   "main": [
+    [
+     {
+      "node": "Y a-t-il des rappels ?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Y a-t-il des rappels ?": {
+   "main": [
+    [
+     {
+      "node": "Formater l'email",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Formater l'email": {
+   "main": [
+    [
+     {
+      "node": "Envoyer email",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Envoyer email": {
+   "main": [
+    [
+     {
+      "node": "Preparer mark notified",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Preparer mark notified": {
+   "main": [
+    [
+     {
+      "node": "Marquer notifies",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "binaryMode": "separate"
+ },
+ "staticData": {
+  "node:Toutes les 5 minutes": {
+   "recurrenceRules": []
+  }
+ },
+ "meta": {
+  "templateCredsSetupCompleted": true
+ },
+ "pinData": {},
+ "versionId": "08bf1878-4e25-4ed5-a20f-3664afd1e724",
+ "activeVersionId": "08bf1878-4e25-4ed5-a20f-3664afd1e724",
+ "versionCounter": 21,
+ "triggerCount": 2,
+ "shared": [
+  {
+   "updatedAt": "2026-06-02T19:57:11.110Z",
+   "createdAt": "2026-06-02T19:57:11.110Z",
+   "role": "workflow:owner",
+   "workflowId": "1tnbGRizEeqwkUU2",
+   "projectId": "U5k6LDp4FBuWLJAq",
+   "project": {
+    "updatedAt": "2026-06-01T08:23:22.120Z",
+    "createdAt": "2026-05-31T17:34:24.342Z",
+    "id": "U5k6LDp4FBuWLJAq",
+    "name": "Abou OUATTARA <aboubakary_ouattara@hotmail.com>",
+    "type": "personal",
+    "icon": null,
+    "description": null,
+    "creatorId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  }
+ ],
+ "tags": [],
+ "activeVersion": {
+  "updatedAt": "2026-06-03T19:02:14.000Z",
+  "createdAt": "2026-06-03T18:58:25.568Z",
+  "versionId": "08bf1878-4e25-4ed5-a20f-3664afd1e724",
+  "workflowId": "1tnbGRizEeqwkUU2",
+  "nodes": [
+   {
+    "parameters": {
+     "rule": {
+      "interval": [
+       {
+        "field": "minutes"
+       }
+      ]
+     }
+    },
+    "id": "a31f7cd5-3394-4996-abab-b55f09c3c77b",
+    "name": "Toutes les 5 minutes",
+    "type": "n8n-nodes-base.scheduleTrigger",
+    "typeVersion": 1,
+    "position": [
+     -48,
+     -352
+    ]
+   },
+   {
+    "parameters": {
+     "httpMethod": "POST",
+     "path": "reminders",
+     "responseMode": "responseNode",
+     "options": {}
+    },
+    "id": "761f41ad-0d12-485d-a45f-1edacead726f",
+    "name": "Webhook - Nouveau rappel",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 1,
+    "position": [
+     -48,
+     -128
+    ],
+    "webhookId": "reminders"
+   },
+   {
+    "parameters": {
+     "jsCode": "const body = $input.first().json.body || {};\nconst text = String(body.text || '').trim();\nconst due_at = String(body.due_at || '').trim();\nif (!text) return [{ json: { ok: false, error: 'Texte manquant' } }];\nlet due_str = '';\nif (due_at) {\n  try { due_str = new Date(due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }); } catch(e) { due_str = due_at; }\n}\nconst subject = '[Jarvis] Rappel créé : ' + text.slice(0, 60);\nconst emailBody = 'Bonjour Abo !\\n\\n✅ Ton rappel a bien été créé :\\n\\n' + '📌 ' + text + (due_str ? '\\n⏰ Échéance : ' + due_str : '') + '\\n\\nJe te notifierai quand ce sera l\\'heure.\\n\\nJarvis';\nreturn [{ json: { ok: true, text, due_str, subject, emailBody } }];"
+    },
+    "id": "14e16249-b8ad-4bae-8bdb-7e78386a683a",
+    "name": "Formater confirmation",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     208,
+     -128
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "sendTo": "ouat.abou34@gmail.com",
+     "subject": "={{ $json.subject }}",
+     "message": "={{ $json.emailBody }}",
+     "options": {}
+    },
+    "id": "00acc22d-9649-41a8-93d0-e0e24291f94b",
+    "name": "Email confirmation",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     464,
+     -128
+    ],
+    "webhookId": "6f7c2fa2-c028-4380-ac25-aecf6b4bd4eb",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "respondWith": "json",
+     "responseBody": "={{ JSON.stringify({ ok: true, message: 'Rappel enregistré, confirmation email envoyée.', text: $('Formater confirmation').first().json.text, due_str: $('Formater confirmation').first().json.due_str }) }}",
+     "options": {}
+    },
+    "id": "656e5da1-79eb-4d09-ac2a-ce92ccd8f02e",
+    "name": "Répondre Webhook",
+    "type": "n8n-nodes-base.respondToWebhook",
+    "typeVersion": 1,
+    "position": [
+     720,
+     -128
+    ]
+   },
+   {
+    "parameters": {
+     "url": "http://backend:8000/api/reminders/pending",
+     "options": {}
+    },
+    "id": "79fbd03d-1881-4a41-9c2e-3f6c5864e8d2",
+    "name": "Rappels dus",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4,
+    "position": [
+     160,
+     -352
+    ],
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "conditions": {
+      "number": [
+       {
+        "value1": "={{ $json.count }}",
+        "operation": "larger"
+       }
+      ]
+     }
+    },
+    "id": "423f8bb0-8608-492b-a1c4-6be4fe98a3f8",
+    "name": "Y a-t-il des rappels ?",
+    "type": "n8n-nodes-base.if",
+    "typeVersion": 1,
+    "position": [
+     384,
+     -352
+    ]
+   },
+   {
+    "parameters": {
+     "jsCode": "const mailDest = 'ouat.abou34@gmail.com';\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (échéance : ' + new Date(t.due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour Abo !\\n\\n⏰ Rappels à traiter maintenant :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ⏰ ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
+    },
+    "id": "0b32f165-a204-4af2-8b19-b86d1093e3e0",
+    "name": "Formater l'email",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     608,
+     -432
+    ]
+   },
+   {
+    "parameters": {
+     "sendTo": "={{ $json.mailDest }}",
+     "subject": "={{ $json.subject }}",
+     "message": "={{ $json.body }}",
+     "options": {}
+    },
+    "id": "0e909482-9376-4388-a4bf-8578549791bf",
+    "name": "Envoyer email",
+    "type": "n8n-nodes-base.gmail",
+    "typeVersion": 2,
+    "position": [
+     832,
+     -432
+    ],
+    "webhookId": "be5990f2-4f81-45e7-af7f-355f327108ae",
+    "credentials": {
+     "gmailOAuth2": {
+      "id": "ZO3kLaKLb2hdHVw5",
+      "name": "Gmail account"
+     }
+    },
+    "continueOnFail": true
+   },
+   {
+    "parameters": {
+     "jsCode": "const task_ids = $('Formater l\\'email').first().json.task_ids;\nconst results = [];\nfor (const id of task_ids) {\n  results.push({ json: { id, url: 'http://backend:8000/api/reminders/' + id + '/notified' } });\n}\nreturn results;"
+    },
+    "id": "fb8e79ff-44c5-4740-8f4d-d598f23871cc",
+    "name": "Preparer mark notified",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     1056,
+     -432
+    ]
+   },
+   {
+    "parameters": {
+     "method": "PATCH",
+     "url": "={{ $json.url }}",
+     "options": {}
+    },
+    "id": "b876d4ac-2bcd-4b09-acad-ef766b819c6b",
+    "name": "Marquer notifies",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4,
+    "position": [
+     1280,
+     -432
+    ],
+    "continueOnFail": true
+   }
+  ],
+  "connections": {
+   "Toutes les 5 minutes": {
+    "main": [
+     [
+      {
+       "node": "Rappels dus",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Webhook - Nouveau rappel": {
+    "main": [
+     [
+      {
+       "node": "Formater confirmation",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Formater confirmation": {
+    "main": [
+     [
+      {
+       "node": "Email confirmation",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Email confirmation": {
+    "main": [
+     [
+      {
+       "node": "Répondre Webhook",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Rappels dus": {
+    "main": [
+     [
+      {
+       "node": "Y a-t-il des rappels ?",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Y a-t-il des rappels ?": {
+    "main": [
+     [
+      {
+       "node": "Formater l'email",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Formater l'email": {
+    "main": [
+     [
+      {
+       "node": "Envoyer email",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Envoyer email": {
+    "main": [
+     [
+      {
+       "node": "Preparer mark notified",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Preparer mark notified": {
+    "main": [
+     [
+      {
+       "node": "Marquer notifies",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "authors": "Abou OUATTARA",
+  "name": "Version 08bf1878",
+  "description": "",
+  "autosaved": true,
+  "workflowPublishHistory": [
+   {
+    "createdAt": "2026-06-03T19:02:14.851Z",
+    "id": 30,
+    "workflowId": "1tnbGRizEeqwkUU2",
+    "versionId": "08bf1878-4e25-4ed5-a20f-3664afd1e724",
+    "event": "activated",
+    "userId": "2265e66c-0f2a-4ee6-8cd7-26b4c60b286e"
+   }
+  ]
+ }
+}

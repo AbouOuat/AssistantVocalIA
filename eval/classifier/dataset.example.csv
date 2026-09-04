@@ -1,0 +1,6 @@
+id,source,sender,subject,body,label_urgence,label_action
+ex1,outlook,greffe@tribunal.fr,Convocation audience 12/09,Vous êtes convoqué à l'audience du 12 septembre à 9h. Merci de confirmer votre présence.,haute,repondre
+ex2,gmail,newsletter@medium.com,Vos recommandations de la semaine,Découvrez les articles les plus lus cette semaine sur Medium.,faible,classer
+ex3,outlook,client.dupont@example.com,Question sur mon dossier,"Bonjour Maître, avez-vous du nouveau concernant la partie adverse ? Merci.",moyenne,repondre
+ex4,gmail,facturation@ovh.com,Facture disponible,Votre facture du mois est disponible dans votre espace client.,faible,lire
+ex5,outlook,huissier@etude.fr,Signification à personne,Nous vous signifions par la présente l'ordonnance rendue le 2 septembre. Délai d'appel : 15 jours.,haute,relancer

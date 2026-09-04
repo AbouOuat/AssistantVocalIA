@@ -151,10 +151,14 @@ Puce CV « migration vers LangChain » **retirée** → « sortie LLM structuré
    → **cette éval tranche l'architecture cible V1/V2** (quel moteur garder, quelle planif).
 
 **Fait quand**
-- Parser structuré actif en prod sur les 2 classifiers v2.
-- `DOCS/reports/classifier-eval-2026-09-XX.md` commité avec les chiffres par catégorie (v1 vs v2).
+- ✅ Parser structuré (`json_schema` strict) actif en prod sur les 2 classifiers v2 (Path B, 2026-09-04).
+- ✅ Harness d'éval construit : `eval/classifier/` (`prompts.py` = les 2 variantes, `run_eval.py` =
+  P/R/F1 par classe + matrice de confusion → `DOCS/reports/classifier-eval-<date>.md`, `--dry-run` OK).
+- ⬜ **Toi** : remplir `eval/classifier/dataset.csv` avec 30–50 e-mails réels + annoter
+  `label_urgence` / `label_action`, puis `python eval/classifier/run_eval.py eval/classifier/dataset.csv`
+  et commiter le rapport. C'est le seul reste de T1.
 
-**Effort** : ~0,5–1 j
+**Effort** : ~0,5–1 j (dont l'annotation manuelle, côté toi)
 
 ---
 

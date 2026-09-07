@@ -29,7 +29,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst text = String(body.text || '').trim();\nconst due_at = String(body.due_at || '').trim();\nif (!text) return [{ json: { ok: false, error: 'Texte manquant' } }];\nlet due_str = '';\nif (due_at) {\n  try { due_str = new Date(due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }); } catch(e) { due_str = due_at; }\n}\nconst subject = '[Jarvis] Rappel créé : ' + text.slice(0, 60);\nconst emailBody = 'Bonjour Abo !\\n\\n✅ Ton rappel a bien été créé :\\n\\n' + '📌 ' + text + (due_str ? '\\n⏰ Échéance : ' + due_str : '') + '\\n\\nJe te notifierai quand ce sera l\\'heure.\\n\\nJarvis';\nreturn [{ json: { ok: true, text, due_str, subject, emailBody } }];"
+        "jsCode": "const envv = (k) => { try { return $env[k]; } catch (e) { return undefined; } };\nconst to = envv('CLIENT_SUMMARY_RECIPIENT') || envv('SUMMARY_RECIPIENT_EMAIL') || '';\nconst body = $input.first().json.body || {};\nconst text = String(body.text || '').trim();\nconst due_at = String(body.due_at || '').trim();\nif (!text) return [{ json: { ok: false, error: 'Texte manquant' } }];\nlet due_str = '';\nif (due_at) {\n  try { due_str = new Date(due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }); } catch(e) { due_str = due_at; }\n}\nconst subject = '[Jarvis] Rappel créé : ' + text.slice(0, 60);\nconst emailBody = 'Bonjour Abo !\\n\\n✅ Ton rappel a bien été créé :\\n\\n' + '📌 ' + text + (due_str ? '\\n⏰ Échéance : ' + due_str : '') + '\\n\\nJe te notifierai quand ce sera l\\'heure.\\n\\nJarvis';\nreturn [{ json: { ok: true, to, text, due_str, subject, emailBody } }];"
       },
       "id": "format-confirm",
       "name": "Formater confirmation",
@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "sendTo": "ouat.abou34@gmail.com",
+        "sendTo": "={{ $json.to }}",
         "subject": "={{ $json.subject }}",
         "message": "={{ $json.emailBody }}",
         "options": {}
@@ -98,7 +98,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const mailDest = 'ouat.abou34@gmail.com';\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (échéance : ' + new Date(t.due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour Abo !\\n\\n⏰ Rappels à traiter maintenant :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ⏰ ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
+        "jsCode": "const envv = (k) => { try { return $env[k]; } catch (e) { return undefined; } };\nconst mailDest = envv('CLIENT_SUMMARY_RECIPIENT') || envv('SUMMARY_RECIPIENT_EMAIL') || '';\nif (!mailDest) { console.warn('[reminders] aucun destinataire (CLIENT_SUMMARY_RECIPIENT vide)'); return []; }\nconst due = $input.first().json.due;\nconst lines = due.map(t => {\n  const echeance = t.due_at ? ' (échéance : ' + new Date(t.due_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) + ')' : '';\n  return '- ' + t.text + echeance;\n});\nconst body = 'Bonjour Abo !\\n\\n⏰ Rappels à traiter maintenant :\\n\\n' + lines.join('\\n') + '\\n\\nJarvis';\nreturn [{ json: { body, subject: '[Jarvis] ⏰ ' + due.length + ' rappel(s) en attente', task_ids: due.map(t => t.id), mailDest } }];"
       },
       "id": "format-email",
       "name": "Formater l'email",

@@ -75,7 +75,7 @@
     },
     {
       "parameters": {
-        "sendTo": "={{ $('Webhook').first().json.body.recipient_email || 'ouat.abou34@gmail.com' }}",
+        "sendTo": "={{ $('Webhook').first().json.body.recipient_email || $env.CLIENT_SUMMARY_RECIPIENT || $env.SUMMARY_RECIPIENT_EMAIL }}",
         "subject": "={{ $('Parser la réponse').first().json.email_draft.subject }}",
         "emailType": "text",
         "message": "={{ $('Parser la réponse').first().json.email_draft.body }}",

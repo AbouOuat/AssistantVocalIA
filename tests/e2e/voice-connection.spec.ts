@@ -27,11 +27,13 @@ test.describe("Connexion WebSocket", () => {
     await expect(page.getByRole("button", { name: "Envoyer" })).toBeVisible();
   });
 
-  test("Les Quick Actions sont présentes (5 boutons)", async ({ page }) => {
+  test("Les Quick Actions sont présentes (6 boutons)", async ({ page }) => {
     await page.goto("/");
     const toolbar = page.getByTestId("quick-actions");
     await expect(toolbar).toBeVisible();
     const buttons = toolbar.locator("button");
-    await expect(buttons).toHaveCount(5);
+    // QUICK_ACTIONS (src/types/index.ts) : briefing, compte-rendu, outlook-classify,
+    // classify, tasks, memory — les 2 classifieurs e-mail ont été séparés (refactoring Intent Router).
+    await expect(buttons).toHaveCount(6);
   });
 });

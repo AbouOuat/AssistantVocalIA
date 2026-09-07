@@ -8,7 +8,7 @@
 
 ## Learnings
 
-_(Vide — alimenté par `/close` après chaque phase)_
+- [2026-09-07](memory/learnings/2026-09-07.md) — chantier CV : éval classifieur v1≥v2, éval RAG pgvector (hit@5 100%), gotcha Docker Hub CDN → build pgvector local
 
 ## Topics
 

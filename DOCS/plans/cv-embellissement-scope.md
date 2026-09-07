@@ -293,26 +293,26 @@ image n8n pinnée ; un seul cron actif par paire ; `folder` respecté en prod.
 >
 > Outils : OpenAI API (gpt-4o, Whisper, TTS), Redis, n8n, Microsoft Graph API, Google Calendar API, Telegram API, OpenWeatherMap, Docker Compose, Coolify, VPS Hostinger
 
-### Version À ENVOYER MAINTENANT — 5/6 (2026-09-07)
+### Version À ENVOYER MAINTENANT — 5,5/6 (2026-09-07)
 
-État : T1 schéma ✅ (Path B en prod, testé live) · T3 ✅ · T5 ✅ (CI verte) · Étape 0 ✅
-(hardcodé e-mail purgé, `CLIENT_SUMMARY_RECIPIENT`). **Manquent** : éval classifieur (dataset
-prêt, à exécuter) et RAG (T2, jamais tourné). Puces neuves vs « actuelle » marquées ✚.
+État : T1 schéma ✅ (Path B en prod, testé live) · T1 éval ✅ (`DOCS/reports/classifier-eval-2026-09-07.md`,
+40 e-mails annotés, v1 macro-F1 0,69 urgence / 0,50 action ≥ v2 → **v1 reste le moteur**, v2 = robustesse
+du format) · T3 ✅ · T5 ✅ (CI verte) · Étape 0 ✅ (hardcodé e-mail purgé, `CLIENT_SUMMARY_RECIPIENT`).
+**Manque** : RAG (T2, jamais tourné). Puces neuves vs « actuelle » marquées ✚.
 
 > Jarvis — Assistant personnel vocal d'IA générative et d'automatisation (jarvis.obyz.biz)
 >
 > - Conception d'une architecture multi-services conteneurisée (FastAPI, Next.js 14, Redis, PostgreSQL, nginx) déployée sur VPS via Coolify ; intégrations orchestrées par des workflows n8n : Telegram, Gmail, Outlook (Microsoft Graph API + OAuth2), Google Calendar, OpenWeatherMap
 > - Pipeline vocal en streaming (WebSocket, STT → LLM → TTS) avec repli texte ; routage d'intentions par function calling OpenAI (15 outils : e-mails, agenda, mémoire, rappels, briefing)
-> - Classification d'e-mails Gmail/Outlook : pré-filtrage par règles métier (mots-clés du domaine juridique) puis classification LLM à ✚ **sortie structurée validée par schéma (JSON Schema)** (urgence, action recommandée, échéance, interlocuteur), catégorisation automatique via Graph API et synthèses envoyées par e-mail
+> - Classification d'e-mails Gmail/Outlook : pré-filtrage par règles métier (mots-clés du domaine juridique) puis classification LLM à ✚ **sortie structurée validée par schéma (JSON Schema)** (urgence, action recommandée, échéance, interlocuteur), catégorisation automatique via Graph API et synthèses envoyées par e-mail — ✚ **jeu d'évaluation manuel (precision / recall / F1 par catégorie) comparant deux implémentations**
 > - Système de mémoire conversationnelle scopée par utilisateur avec Redis : clés hiérarchiques, expiration automatique (TTL), namespaces séparés (projets / préférences / tâches) ; ✚ profil client externalisé (`CLIENT_*`)
 > - ✚ **Fiabilité & supervision** : alertes e-mail automatiques en cas d'échec d'un workflow n8n, dégradation gracieuse des workflows (continueOnFail), bascule en réponses simulées si l'API LLM est indisponible
 > - ✚ **CI GitHub Actions** : lint (ruff), tests (pytest + Playwright E2E), build des images Docker
 >
 > Outils : OpenAI API (gpt-4o, Whisper, TTS), Redis, PostgreSQL, n8n, Microsoft Graph API, Google Calendar API, Telegram API, OpenWeatherMap, Docker Compose, GitHub Actions, Coolify, VPS Hostinger
 
-**Pour passer à la version à terme** : +`jeu d'évaluation precision/recall/F1` sur la puce
-classification une fois `classifier-eval-<date>.md` commité ; +puce RAG & `pgvector` une fois
-`rag-eval-<date>.md` commité avec un hit rate réel.
+**Pour passer à la version à terme** : +puce RAG & `pgvector` une fois `rag-eval-<date>.md`
+commité avec un hit rate réel (T2). Le reste est couvert.
 
 ### Version À TERME (après Étape 0 + T1 + T3 + T5 + T2 ; puces neuves marquées ✚)
 
